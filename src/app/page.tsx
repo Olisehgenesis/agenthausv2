@@ -117,9 +117,9 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gypsum font-mono pb-20 relative">
-      {/* Beta Corner Badge */}
-      <div className="absolute top-0 right-0 z-50 p-2 pointer-events-none md:p-4">
-        <div className="bg-accent border-2 border-forest p-2 text-[8px] md:text-[9px] font-bold uppercase tracking-tighter text-white neobrutal-shadow max-w-[100px] md:max-w-[120px] text-right">
+      {/* Beta Bottom Badge */}
+      <div className="fixed bottom-4 right-4 z-50 pointer-events-none opacity-40 hover:opacity-100 transition-opacity">
+        <div className="border border-forest/20 p-2 text-[8px] font-bold uppercase tracking-tight text-forest/60 text-right bg-gypsum/80 backdrop-blur-sm">
           BETA: ACTIVE UPDATES.<br/>EXPORT DATA REGULARLY.
         </div>
       </div>
