@@ -67,6 +67,12 @@ export async function POST(request: Request) {
       configuration,
       ownerAddress,
       walletOption,
+      erc8004AgentId,
+      externalAgentId,
+      erc8004ChainId,
+      erc8004URI,
+      publicKey,
+      source,
     } = body;
 
     if (!name || !templateType || !ownerAddress) {
@@ -90,10 +96,10 @@ export async function POST(request: Request) {
     }
 
     // Wallet assignment based on walletOption
-    let agentWalletAddress: string | null = null;
+    let agentWalletAddress: string | null = body.agentWalletAddress || null;
     let walletDerivationIndex: number | null = null;
 
-    const effectiveWalletOption = walletOption || "dedicated";
+    const effectiveWalletOption = walletOption || (source === "import" ? "later" : "dedicated");
     if (effectiveWalletOption === "dedicated") {
       try {
         walletDerivationIndex = await getNextDerivationIndex();
@@ -105,7 +111,7 @@ export async function POST(request: Request) {
       agentWalletAddress = ownerAddress;
       walletDerivationIndex = null;
     }
-    // walletOption === "later" → both remain null
+    // walletOption === "later" or source === "import" → both remain as provided or null
 
     // Create agent in database with status "deploying".
     // The client will trigger ERC-8004 on-chain registration (wallet signature),
@@ -123,19 +129,24 @@ export async function POST(request: Request) {
         ownerId: user.id,
         agentWalletAddress,
         walletDerivationIndex,
-        status: "deploying",
-        deployedAt: null,
+        status: source === "import" ? "active" : "deploying",
+        deployedAt: source === "import" ? new Date() : null,
+        erc8004AgentId: erc8004AgentId || externalAgentId,
+        erc8004ChainId: erc8004ChainId ? parseInt(erc8004ChainId) : undefined,
+        erc8004URI,
+        verification: publicKey ? {
+          create: {
+            publicKey,
+            encryptedPrivateKey: "", // No private key for imported agents
+            status: "verified",
+          }
+        } : undefined,
       },
     });
-
-    // Log creation
-    await prisma.activityLog.create({
-      data: {
-        agentId: agent.id,
-        type: "info",
-        message: `Agent "${name}" created with ${llmProvider || "groq"}/${llmModel || "default"}`,
-      },
-    });
+    
+    const activityMessage = source === "import" 
+      ? `Agent "${name}" imported from ${erc8004ChainId ? `chain ${erc8004ChainId}` : "external source"}`
+      : `Agent "${name}" created with ${llmProvider || "groq"}/${llmModel || "default"}`;
 
     if (agentWalletAddress) {
       await prisma.activityLog.create({

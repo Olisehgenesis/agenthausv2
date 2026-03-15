@@ -343,6 +343,11 @@ export default function AgentDetailPage() {
               <Badge variant={agent.status === "active" ? "default" : "warning"} className="text-[10px] h-5">
                 {agent.status}
               </Badge>
+              {agent.ensSubdomain && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-black text-accent uppercase tracking-wide">
+                  🏷 {agent.ensSubdomain}.agenthaus.eth
+                </span>
+              )}
               {verificationStatus?.verified && (
                 <span
                   title="Verified and backed by human"
@@ -384,7 +389,7 @@ export default function AgentDetailPage() {
                   />
                 </div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-forest font-medium">Chat with {agent.name}</h3>
+                  <h3 className="text-forest font-medium">{agent.name} {agent.ensSubdomain && <span className="text-accent">({agent.ensSubdomain}.agenthaus.eth)</span>}</h3>
                   {verificationStatus?.verified && (
                     <span
                       title="Verified and backed by human"

@@ -53,11 +53,17 @@ export async function GET() {
     const totalVolume = volumeAgg._sum.amount ?? 0;
     
     // Count based on both the EnsSubdomain table AND the ensSubdomain field on Agent
-    const hausNamesCount = await prisma.agent.count({
-      where: {
-        ensSubdomain: { not: null },
-      },
-    });
+    let hausNamesCount = 0;
+    try {
+      hausNamesCount = await prisma.agent.count({
+        where: {
+          ensSubdomain: { not: null },
+        },
+      });
+    } catch (e) {
+      console.error("Error counting haus names:", e);
+      hausNamesCount = 0;
+    }
     const deploymentRate = totalAgents > 0 ? (deployedAgents / totalAgents) * 100 : 0;
     const activeRate = totalAgents > 0 ? (activeAgents / totalAgents) * 100 : 0;
     const averageAgentsPerUser = usersCount > 0 ? totalAgents / usersCount : 0;

@@ -79,6 +79,11 @@ export function InfoModal({ open, onClose, agent, verificationStatus, channelDat
             <h2 className="text-lg font-semibold text-forest">{agent.name}</h2>
             <div className="flex items-center gap-2 mt-0.5">
               <Badge variant="outline" className="capitalize">{agent.templateType}</Badge>
+              {agent.ensSubdomain && (
+                <Badge className="bg-accent/10 text-accent border-accent/20 px-2 py-0 font-black uppercase text-[10px] hover:bg-accent/20 transition-colors">
+                  🏷 {agent.ensSubdomain}.agenthaus.eth
+                </Badge>
+              )}
             </div>
           </div>
         </div>

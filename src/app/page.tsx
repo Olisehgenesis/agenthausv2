@@ -236,8 +236,8 @@ export default function HomePage() {
                     className="w-full h-full object-contain p-0.5"
                   />
                 </div>
-                <span>{agent?.name} is {agent?.status}</span>
-                <span className="text-accent">#{agent?.erc8004?.agentId || "ERC-8004"}</span>
+                <span>{agent?.ensSubdomain ? `${agent.ensSubdomain}.agenthaus.eth` : agent?.name} is {agent?.status}</span>
+                <span className="text-accent">{agent?.ensSubdomain ? "🏷 HAUS NAME" : (agent?.erc8004?.agentId ? `#${agent.erc8004.agentId}` : "ERC-8004")}</span>
               </Link>
             ))}
           </div>
@@ -253,27 +253,81 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* New Haus Names Showcase */}
-          {stats && stats.hausNamesCount > 0 && (
-            <div className="mt-12 bg-forest text-white p-6 border-4 border-forest shadow-hard">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-60">Registered Haus Names</h3>
-              <div className="flex flex-wrap gap-3">
-                {agents
-                  .filter(a => a.ensSubdomain)
-                  .map(a => (
-                    <div key={a.id} className="bg-white/10 hover:bg-white/20 border-2 border-white/20 px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors">
-                      {a.ensSubdomain}.agenthaus.eth
-                    </div>
-                  ))
-                }
-                {agents.filter(a => a.ensSubdomain).length < stats.hausNamesCount && (
-                  <div className="text-[10px] font-bold uppercase flex items-center opacity-40">
-                    + {stats.hausNamesCount - agents.filter(a => a.ensSubdomain).length} more names
+          {/* Haus Names Section */}
+          <div className="mt-20">
+            <h2 className="text-4xl font-sans font-normal text-forest uppercase tracking-tighter mb-8 border-b-4 border-forest pb-4 inline-block">
+              Haus Names
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Card 1: Identity */}
+              <div className="p-6 border-2 border-forest bg-white neobrutal-shadow flex flex-col h-full">
+                <div className="text-xs font-bold uppercase tracking-widest text-forest/40 mb-4">Human Identity</div>
+                <div className="flex-1 flex flex-col justify-center items-center gap-4 py-8">
+                  <div className="text-[10px] font-mono bg-gypsum px-2 py-1 border border-forest/20">0x1b2...4f5a</div>
+                  <div className="text-xl animate-bounce">↓</div>
+                  <div className="font-bold text-accent uppercase tracking-tighter text-lg">myagent.agenthaus.eth</div>
+                </div>
+                <p className="text-[10px] font-bold uppercase text-forest/60 text-center">Give your agents a brand users can trust and recall.</p>
+              </div>
+
+              {/* Card 2: Pricing & x402 */}
+              <div className="p-6 border-2 border-forest bg-celo-yellow neobrutal-shadow flex flex-col h-full ring-4 ring-accent/10">
+                <div className="text-xs font-bold uppercase tracking-widest text-forest/40 mb-4">Micropayments (x402)</div>
+                <div className="flex-1 flex flex-col justify-center items-center py-8">
+                  <div className="text-4xl font-sans text-forest mb-2">$0.30</div>
+                  <div className="text-[10px] font-black uppercase bg-forest text-white px-2 py-0.5 mb-4">Gasless Setup</div>
+                  <p className="text-center text-xs font-bold uppercase text-forest/80 px-4 leading-tight">Pay with stablecoins via x402. No gas needed. Instant registration.</p>
+                </div>
+                <div className="text-[10px] font-bold uppercase text-forest/40 text-center italic mt-2">Formerly $1.00</div>
+              </div>
+
+              {/* Card 3: Programmable */}
+              <div className="p-6 border-2 border-forest bg-white neobrutal-shadow flex flex-col h-full">
+                <div className="text-xs font-bold uppercase tracking-widest text-forest/40 mb-4">Programmable</div>
+                <div className="flex-1 bg-forest p-4 font-mono text-[9px] text-gypsum overflow-hidden relative group">
+                  <div className="absolute inset-0 bg-forest/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <span className="text-celo-yellow font-bold uppercase tracking-widest">Read API Docs</span>
                   </div>
-                )}
+                  <span className="text-celo-yellow">curl</span> -X POST agenthaus.space/api/buy \<br/>
+                  &nbsp;&nbsp;-H <span className="text-accent">"X-Payment: x402_sig"</span> \<br/>
+                  &nbsp;&nbsp;-d <span className="text-white">{"'{\"name\": \"agent007\"}'"}</span>
+                </div>
+                <p className="text-[10px] font-bold uppercase text-forest/60 mt-4 text-center">Let your agents buy their own names autonomously via API.</p>
               </div>
             </div>
-          )}
+
+            <div className="mt-12 text-center">
+              <Link href="/dashboard/ens/buy?method=x402">
+                <Button size="lg" className="h-14 px-10 bg-forest text-white border-2 border-forest rounded-none font-bold uppercase tracking-widest text-sm neobrutal-shadow hover:bg-forest/90 transition-all flex items-center gap-3 mx-auto">
+                  <Zap className="w-5 h-5 fill-celo-yellow text-celo-yellow" />
+                  Claim your Haus Name (x402)
+                </Button>
+              </Link>
+              <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-forest/40">
+                Securely recorded in the Agent Haus Resolver.
+              </p>
+            </div>
+            
+            {/* Show recently registered names if any */}
+            {stats && stats.hausNamesCount > 0 && (
+              <div className="mt-16 border-t-2 border-forest/10 pt-8 overflow-hidden">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-forest/40 text-center">Recent Registrations</div>
+                <div className="flex gap-8 animate-marquee whitespace-nowrap opacity-40 hover:opacity-100 transition-opacity">
+                  {agents.filter(a => a.ensSubdomain).map((a, i) => (
+                    <span key={i} className="text-xs font-bold uppercase tracking-widest text-forest">
+                      {a.ensSubdomain}.agenthaus.eth
+                    </span>
+                  ))}
+                  {/* Duplicate for seamless loop if count is small */}
+                  {agents.filter(a => a.ensSubdomain).length < 10 && agents.filter(a => a.ensSubdomain).map((a, i) => (
+                    <span key={`dup-${i}`} className="text-xs font-bold uppercase tracking-widest text-forest">
+                      {a.ensSubdomain}.agenthaus.eth
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Roadmap Section */}
