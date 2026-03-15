@@ -26,6 +26,7 @@ import {
   type TransactionReceipt,
   getAddress,
 } from "viem";
+import { prepareCeloTransaction } from "../transactions/fee-abstraction";
 import { type ERC8004Registration } from "@/lib/types";
 import { DEPLOYMENT_ATTRIBUTION, DEPLOYMENT_URL } from "@/lib/constants";
 import { ipfsToPublicGatewayUrl } from "@/lib/ipfs-url";
@@ -260,12 +261,16 @@ export async function registerAgent(
   });
   }
 
-  const hash = await walletClient.sendTransaction({
+  const txRequest = await prepareCeloTransaction(ownerAddress, {
     to: identityRegistryAddress,
     data,
+  });
+
+  const hash = await walletClient.sendTransaction({
+    ...txRequest,
     account: ownerAddress,
     chain: walletClient.chain,
-  });
+  } as any);
 
   return hash;
 }
@@ -352,12 +357,16 @@ export async function updateAgentURI(
     args: [agentId, newURI],
   });
 
-  return walletClient.sendTransaction({
+  const txRequest = await prepareCeloTransaction(ownerAddress, {
     to: identityRegistryAddress,
     data,
+  });
+
+  return walletClient.sendTransaction({
+    ...txRequest,
     account: ownerAddress,
     chain: walletClient.chain,
-  });
+  } as any);
 }
 
 /**

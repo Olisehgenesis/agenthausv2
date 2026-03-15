@@ -2,9 +2,26 @@
 
 import React from "react";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
-import { Bell, Search } from "lucide-react";
+import { Bell, Search, Globe, Plus } from "lucide-react";
+import Link from "next/link";
+import { useAccount } from "wagmi";
 
 export function Header() {
+  const { address } = useAccount();
+  const [ensName, setEnsName] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!address) return;
+    fetch(`/api/agents?ownerAddress=${address}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const agentWithEns = data.agents?.find((a: any) => a.ensSubdomain);
+        if (agentWithEns) {
+          setEnsName(`${agentWithEns.ensSubdomain}.agenthaus.space`);
+        }
+      });
+  }, [address]);
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between h-20 px-8 border-b-4 border-forest bg-white">
       {/* Search */}
@@ -21,6 +38,20 @@ export function Header() {
 
       {/* Right Side */}
       <div className="flex items-center gap-6">
+        {/* ENS Status */}
+        <Link href="/dashboard/ens/buy">
+          <div className="flex items-center gap-2 px-4 py-2 bg-gypsum border-2 border-forest shadow-hard hover:bg-celo transition-all cursor-pointer group">
+            <Globe className="w-5 h-5 text-forest group-hover:animate-spin" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-tighter text-forest/50 leading-none">Identity</span>
+              <span className="text-xs font-black uppercase tracking-widest text-forest">
+                {ensName || "Claim Name"}
+              </span>
+            </div>
+            {!ensName && <Plus className="w-3 h-3 text-forest ml-1" />}
+          </div>
+        </Link>
+
         {/* Notifications */}
         <button className="relative w-12 h-12 border-2 border-forest bg-white flex items-center justify-center hover:bg-celo transition-colors cursor-pointer shadow-hard active:translate-y-px active:shadow-hard-active">
           <Bell className="w-6 h-6" />
