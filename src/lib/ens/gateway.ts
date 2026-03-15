@@ -64,7 +64,7 @@ export async function resolveEnsQuery(sender: Address, data: Hex): Promise<{ dat
       const key = (decoded.args as any)[1] as string;
       if (key === "name") result = agent.name;
       else if (key === "description") result = agent.description || "";
-      else if (key === "url") result = `https://agenthaus.space/dashboard/agents/${agent.name}`;
+      else if (key === "url") result = `https://agenthaus.space/dashboard/agents/${agent.name}`; // Dashboard remains on .space
       else result = "";
     } else if (decoded.functionName === "contenthash") {
       // Contenthash is usually IPFS or similar, return empty for now

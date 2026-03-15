@@ -5,7 +5,7 @@ import { namehash } from "viem/ens";
 import { formatEther, parseEther, isAddress, type Hash } from "viem";
 
 const REGISTRAR_ADDRESS = "0x5785A2422d51c841C19773161213ECD12dBB50d4";
-const ENS_ROOT = "agenthaus.space";
+const ENS_ROOT = "agenthaus.eth";
 
 /**
  * Register an ENS subdomain for an agent.

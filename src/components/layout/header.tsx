@@ -17,7 +17,7 @@ export function Header() {
       .then((data) => {
         const agentWithEns = data.agents?.find((a: any) => a.ensSubdomain);
         if (agentWithEns) {
-          setEnsName(`${agentWithEns.ensSubdomain}.agenthaus.space`);
+          setEnsName(`${agentWithEns.ensSubdomain}.agenthaus.eth`);
         }
       });
   }, [address]);

@@ -104,7 +104,7 @@ export default function EnsBuyPage() {
       });
 
       if (res.ok) {
-        toast.success(`Registered ${subdomain}.agenthaus.space!`);
+        toast.success(`Registered ${subdomain}.agenthaus.eth!`);
         router.push(`/dashboard/agents/${selectedAgent.id}`);
       } else {
         const error = await res.json();
@@ -177,7 +177,7 @@ export default function EnsBuyPage() {
                   onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                   className="h-12 text-lg font-mono border-forest/20 focus:ring-forest/30"
                 />
-                <span className="text-lg font-mono text-forest-muted">.agenthaus.space</span>
+                <span className="text-lg font-mono text-forest-muted">.agenthaus.eth</span>
               </div>
               <p className="text-xs text-forest-muted">
                 Minimum 3 characters. Use letters, numbers, and hyphens.
