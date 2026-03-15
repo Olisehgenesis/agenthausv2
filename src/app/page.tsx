@@ -140,13 +140,15 @@ export default function HomePage() {
 
           {/* Heading - Anton Font, Large, Uppercase */}
           <h1 className="text-5xl md:text-7xl xl:text-8xl font-sans font-normal mb-6 leading-[0.9] text-forest uppercase tracking-tighter">
-            AGENT HAUS
+            [BETA] AGENT HAUS
           </h1>
 
           {/* Subtitle */}
           <p className="text-xs md:text-sm text-forest/80 max-w-2xl mx-auto mb-6 leading-relaxed font-bold uppercase tracking-wide">
             On Click Deploy ERC8004 AI agents.
             Automated registration, secure management, and real-time monitoring.
+            <br />
+            <span className="text-accent">Note: Agent Haus is in Beta and undergoing active updates—please export your data regularly as data loss can occur during this period.</span>
           </p>
 
           {/* Search Bar / Console Area - Neobrutalist */}
