@@ -73,6 +73,7 @@ export async function GET(request: Request) {
         createdAt: agent.createdAt,
         deployedAt: agent.deployedAt,
         reputationScore: agent.reputationScore,
+        ensSubdomain: (agent as any).ensSubdomain ?? null,
         deployer: {
           // This is the agent's on-chain wallet used in ERC-8004 metadata / SelfClaw,
           // not the human owner's wallet address.

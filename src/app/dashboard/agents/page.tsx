@@ -48,6 +48,7 @@ interface AgentData {
   erc8004ChainId?: number | null;
   createdAt: string;
   deployedAt: string | null;
+  ensSubdomain?: string | null;
   transactions: { id: string }[];
   verification?: {
     selfxyzVerified: boolean;
@@ -160,13 +161,25 @@ export default function AgentsPage() {
           <p className="text-forest font-bold uppercase tracking-widest mt-4">
             Total Capacity: {agents.length} Nodes Operational
           </p>
+          {agents.filter((a) => a.ensSubdomain).length > 0 && (
+            <p className="text-accent font-black uppercase tracking-widest text-sm mt-1">
+              🏷 {agents.filter((a) => a.ensSubdomain).length} Haus Name{agents.filter((a) => a.ensSubdomain).length !== 1 ? "s" : ""} Registered
+            </p>
+          )}
         </div>
-        <Link href="/dashboard/agents/new">
-          <Button size="lg" className="text-xl px-12 h-16">
-            <Plus className="w-6 h-6 stroke-[3px]" />
-            New Deployment
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/ens/buy">
+            <Button size="lg" variant="outline" className="text-base px-6 h-14 border-2 border-forest">
+              🏷 Buy Haus Name
+            </Button>
+          </Link>
+          <Link href="/dashboard/agents/new">
+            <Button size="lg" className="text-xl px-12 h-16">
+              <Plus className="w-6 h-6 stroke-[3px]" />
+              New Deployment
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Agents Grid */}
@@ -211,9 +224,15 @@ export default function AgentsPage() {
                           <BadgeCheck className="w-5 h-5 text-forest" />
                         )}
                       </div>
-                      <p className="text-xs font-bold uppercase text-forest/50 mt-1">
-                        {agent.templateType} NODE
-                      </p>
+                      {agent.ensSubdomain ? (
+                        <p className="text-[10px] font-black uppercase text-accent mt-1 tracking-wide">
+                          🏷 {agent.ensSubdomain}.agenthaus.eth
+                        </p>
+                      ) : (
+                        <p className="text-xs font-bold uppercase text-forest/50 mt-1">
+                          {agent.templateType} NODE
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="relative">
@@ -308,12 +327,21 @@ export default function AgentsPage() {
                       <Activity className="w-4 h-4" />
                       {agent.transactions?.length ?? 0} Ops
                     </div>
-                    <Link href={`/dashboard/agents/${agent.id}`}>
-                      <Button size="sm" variant="outline" className="h-8 px-4 text-[10px]">
-                        Details
-                        <ArrowUpRight className="w-3 h-3 h-3 h-3" />
-                      </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {!agent.ensSubdomain && (
+                        <Link href={`/dashboard/ens/buy?agentId=${agent.id}`}>
+                          <Button size="sm" variant="outline" className="h-8 px-3 text-[10px] border-amber-400 text-amber-700 hover:bg-amber-50">
+                            🏷 Buy Name
+                          </Button>
+                        </Link>
+                      )}
+                      <Link href={`/dashboard/agents/${agent.id}`}>
+                        <Button size="sm" variant="outline" className="h-8 px-4 text-[10px]">
+                          Details
+                          <ArrowUpRight className="w-3 h-3 h-3 h-3" />
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>

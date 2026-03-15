@@ -45,7 +45,7 @@ export async function resolveEnsQuery(sender: Address, data: Hex): Promise<{ dat
     const node = (decoded.args as any)[0] as Hex;
 
     // Find the agent with the matching namehash
-    const agent = await prisma.agent.findUnique({
+    const agent = await (prisma.agent as any).findUnique({
       where: { ensNode: node },
       select: { agentWalletAddress: true, name: true, description: true },
     });

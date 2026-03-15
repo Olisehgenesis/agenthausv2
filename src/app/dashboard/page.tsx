@@ -41,6 +41,7 @@ interface AgentSummary {
   reputationScore: number;
   spendingUsed: number;
   spendingLimit: number;
+  ensSubdomain?: string | null;
 }
 
 interface RecentActivityItem {
@@ -189,7 +190,13 @@ export default function DashboardPage() {
                               <CheckCircle2 className="w-5 h-5 text-blue-500 fill-blue-500/10" />
                             )}
                           </div>
-                          <div className="text-xs font-bold uppercase text-forest/60">{agent.templateType} • AGENTHAUS v1</div>
+                          {agent.ensSubdomain ? (
+                            <div className="text-[10px] font-black uppercase text-accent mt-0.5 tracking-wide">
+                              🏷 {agent.ensSubdomain}.agenthaus.eth
+                            </div>
+                          ) : (
+                            <div className="text-xs font-bold uppercase text-forest/60">{agent.templateType} • AGENTHAUS v1</div>
+                          )}
                         </div>
                       </div>
                       <div className={`px-3 py-1 text-xs font-black uppercase border-2 border-forest ${agent.status === "active" ? "bg-green-400" : "bg-amber-400"

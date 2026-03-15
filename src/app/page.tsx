@@ -240,7 +240,14 @@ export default function HomePage() {
                     className="w-full h-full object-contain p-0.5"
                   />
                 </div>
-                <span>{agent?.name} is {agent?.status}</span>
+                {agent?.ensSubdomain ? (
+                  <>
+                    <span className="text-accent font-black">{agent.ensSubdomain}.agenthaus.eth</span>
+                    <span className="text-forest/50">is {agent?.status}</span>
+                  </>
+                ) : (
+                  <span>{agent?.name} is {agent?.status}</span>
+                )}
                 <span className="text-accent">#{agent?.erc8004?.agentId || "ERC-8004"}</span>
               </Link>
             ))}

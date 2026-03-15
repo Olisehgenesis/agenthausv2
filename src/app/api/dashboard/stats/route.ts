@@ -90,6 +90,7 @@ export async function GET(request: Request) {
       reputationScore: a.reputationScore,
       spendingUsed: a.spendingUsed,
       spendingLimit: a.spendingLimit,
+      ensSubdomain: (a as any).ensSubdomain ?? null,
     }));
 
     return NextResponse.json({

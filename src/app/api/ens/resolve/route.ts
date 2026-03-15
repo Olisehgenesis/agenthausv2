@@ -38,10 +38,8 @@ export async function POST(req: NextRequest) {
  * Format: /api/ens/resolve/{sender}/{data}.json
  */
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { sender: string; data: string } }
+  req: NextRequest
 ) {
-  // If we wanted to support GET, we'd pull from params.
-  // Our OffchainResolver currently uses POST.
+  // GET is not supported; our OffchainResolver uses POST.
   return NextResponse.json({ message: "Use POST" }, { status: 405 });
 }
