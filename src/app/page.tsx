@@ -147,7 +147,8 @@ export default function HomePage() {
 
           {/* Heading - Anton Font, Large, Uppercase */}
           <h1 className="text-5xl md:text-7xl xl:text-8xl font-sans font-normal mb-6 leading-[0.9] text-forest uppercase tracking-tighter">
-            [BETA] AGENT HAUS
+            <span className="text-[0.15em] opacity-40 vertical-middle mr-2 inline-block">[BETA]</span>
+            AGENT HAUS
           </h1>
 
           {/* Subtitle */}
