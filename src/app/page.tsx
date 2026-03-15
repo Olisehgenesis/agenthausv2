@@ -170,32 +170,17 @@ export default function HomePage() {
               </div>
               <button
                 type="button"
-                onClick={() => router.push("/dashboard/agents/new")}
+                onClick={() => router.push("/dashboard")}
                 className={cn(
                   "shrink-0 h-full flex items-center justify-center gap-2 px-6 bg-forest text-white font-bold uppercase tracking-widest text-[10px] md:text-xs transition-all duration-200 border-l-2 border-forest hover:bg-forest/90 active:bg-forest/80"
                 )}
               >
                 <Send className="w-3.5 h-3.5" />
-                Deploy
+                Enter App
               </button>
             </div>
-            <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-forest/40">
-              Prefer chat? <Link href="/beta/create" className="text-forest/60 hover:text-forest underline underline-offset-2">Try Chat Deploy</Link>
-            </p>
           </div>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
-            <Link href="/dashboard">
-              <Button
-                size="lg"
-                className="h-12 px-8 bg-accent text-white border-2 border-forest rounded-none font-bold uppercase tracking-widest text-sm neobrutal-shadow"
-              >
-                <Bot className="w-5 h-5" />
-                Enter app
-              </Button>
-            </Link>
-          </div>
 
           {/* Social Proof - Agent Avatars */}
           <div className="flex flex-col items-center gap-3 mb-8">
