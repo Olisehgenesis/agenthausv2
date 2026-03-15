@@ -55,6 +55,7 @@ export default function HomePage() {
     activeAgents: number;
     verifiedAgents: number;
     tokensDeployed: number;
+    hausNamesCount: number;
     transactionsCount: number;
     totalVolume: number;
     deploymentRate: number;
@@ -105,11 +106,13 @@ export default function HomePage() {
       { label: "Total agents", value: formatCompactNumber(stats.agentsTotal) },
       { label: "Unique users", value: formatCompactNumber(stats.uniqueUsers) },
       { label: "Active agents", value: formatCompactNumber(stats.activeAgents) },
+      { label: "Haus names", value: formatCompactNumber(stats.hausNamesCount ?? 0) },
     ]
     : [
       { label: "Total agents", value: "—" },
       { label: "Unique users", value: "—" },
       { label: "Active agents", value: "—" },
+      { label: "Haus names", value: "—" },
     ];
 
   return (
@@ -255,7 +258,7 @@ export default function HomePage() {
         </div>
 
         <div className="max-w-6xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {statsCards.map((stat) => (
               <div key={stat.label} className="p-4 border-2 border-forest bg-white neobrutal-shadow text-center">
                 <div className="text-3xl md:text-4xl font-sans font-normal text-forest mb-1">{stat.value}</div>

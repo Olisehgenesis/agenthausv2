@@ -48,6 +48,13 @@ export async function GET() {
     const transactionsCount = await prisma.transaction.count();
     const volumeAgg = await prisma.transaction.aggregate({ _sum: { amount: true } });
     const totalVolume = volumeAgg._sum.amount ?? 0;
+    let hausNamesCount = 0;
+    try {
+      hausNamesCount = await (prisma as any).ensSubdomain.count();
+    } catch {
+      // Table may not exist in all envs
+      hausNamesCount = 0;
+    }
     const deploymentRate = totalAgents > 0 ? (deployedAgents / totalAgents) * 100 : 0;
     const activeRate = totalAgents > 0 ? (activeAgents / totalAgents) * 100 : 0;
     const averageAgentsPerUser = usersCount > 0 ? totalAgents / usersCount : 0;
@@ -60,6 +67,7 @@ export async function GET() {
       activeAgents,
       verifiedAgents,
       tokensDeployed,
+      hausNamesCount,
       transactionsCount,
       totalVolume,
       deploymentRate,
