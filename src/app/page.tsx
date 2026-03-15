@@ -116,7 +116,14 @@ export default function HomePage() {
     ];
 
   return (
-    <div className="min-h-screen bg-gypsum font-mono pb-20">
+    <div className="min-h-screen bg-gypsum font-mono pb-20 relative">
+      {/* Beta Corner Badge */}
+      <div className="absolute top-0 right-0 z-50 p-2 pointer-events-none md:p-4">
+        <div className="bg-accent border-2 border-forest p-2 text-[8px] md:text-[9px] font-bold uppercase tracking-tighter text-white neobrutal-shadow max-w-[100px] md:max-w-[120px] text-right">
+          BETA: ACTIVE UPDATES.<br/>EXPORT DATA REGULARLY.
+        </div>
+      </div>
+
       {/* Top Utility Bar */}
       <div className="w-full border-b-2 border-forest bg-white/50 backdrop-blur-sm px-6 py-2 flex justify-center md:justify-end gap-6 text-[10px] font-bold uppercase tracking-widest text-forest/60">
         <Link href="/how-it-works" className="hover:text-forest transition-colors">
@@ -147,8 +154,6 @@ export default function HomePage() {
           <p className="text-xs md:text-sm text-forest/80 max-w-2xl mx-auto mb-6 leading-relaxed font-bold uppercase tracking-wide">
             On Click Deploy ERC8004 AI agents.
             Automated registration, secure management, and real-time monitoring.
-            <br />
-            <span className="text-accent">Note: Agent Haus is in Beta and undergoing active updates—please export your data regularly as data loss can occur during this period.</span>
           </p>
 
           {/* Search Bar / Console Area - Neobrutalist */}
