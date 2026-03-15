@@ -1,0 +1,321 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String?  @unique
+  walletAddress String   @unique
+  walletDerivationIndex Int?     @unique
+  
+  // Per-user encrypted LLM API keys (never stored in env)
+  openrouterApiKey  String?  // AES-256-GCM encrypted
+  openaiApiKey      String?  // AES-256-GCM encrypted
+  groqApiKey        String?  // AES-256-GCM encrypted
+  grokApiKey        String?  // AES-256-GCM encrypted
+  geminiApiKey      String?  // AES-256-GCM encrypted
+  deepseekApiKey    String?  // AES-256-GCM encrypted
+  zaiApiKey         String?  // AES-256-GCM encrypted
+  anthropicApiKey   String?  // AES-256-GCM encrypted
+  
+  telegramId        String?  @unique
+  telegramUsername  String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  agents        Agent[]
+  agentTasks    AgentTask[]
+  channelBindings ChannelBinding[]
+}
+
+model Agent {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  templateType    String   // payment, trading, social, custom
+  status          String   @default("draft") // draft, deploying, active, paused, stopped
+  systemPrompt    String?
+  llmProvider     String   @default("openrouter") // openrouter, zai
+  llmModel        String   @default("meta-llama/llama-3.3-70b-instruct:free")
+  spendingLimit   Float    @default(100.0)
+  spendingUsed    Float    @default(0.0)
+  
+  // Wallet — derived from master mnemonic via HD path m/44'/60'/0'/0/{index}
+  agentWalletAddress    String?
+  walletDerivationIndex Int?     // HD derivation index for this agent
+  
+  // Channel integrations (per-agent, multi-tenant)
+  telegramBotToken      String?  // AES-256-GCM encrypted bot token from @BotFather
+  telegramChatIds       String?           @db.Text // JSON array of allowed chat IDs
+  discordBotToken       String?  // AES-256-GCM encrypted Discord bot token
+  webhookSecret         String?           @unique
+  disabledSkills        String?           @db.Text // JSON array of skill IDs that are disabled
+  externalSocials       String?           @db.Text // JSON: { telegram, twitter, website }
+  channels              String?  // JSON: [{ type, enabled, config }]
+  cronJobs              String?  // JSON: [{ id, name, cron, skillPrompt, enabled, lastRun }]
+  
+  // OpenClaw pairing — 6-char code for shared-bot channel binding
+  pairingCode           String?  @unique  // e.g. "AF7X2K"
+  pairingCodeExpiresAt  DateTime?         // codes expire after 24h (regenerated on demand)
+  
+  // Legacy OpenClaw (optional, kept for backward compat)
+  openclawAgentId       String?
+  
+  // Per-agent image: URL (agenthaus.space/images/...) and base64 PNG data
+  imageUrl        String?  // https://agenthaus.space/images/agentname-xxxx.png
+  imageSlug       String?  // agentname-xxxx.png — for serving via /api/images/[slug]
+  imageDataBase64 String?  // Compressed PNG as base64 (served from API)
+  
+  // ERC-8004 (on-chain identity)
+  erc8004AgentId  String?  // On-chain NFT tokenId from IdentityRegistry
+  erc8004URI      String?  // Registration JSON URL set on-chain
+  erc8004TxHash   String?  // Registration tx hash for verification
+  erc8004ChainId  Int?     // Chain where agent is registered (42220 = Celo)
+  reputationScore Float    @default(0.0)
+
+  // export tracking (user-initiated JSON dump + wallet key)
+  exported        Boolean  @default(false)
+  exportedAt      DateTime?
+
+  // Configuration (JSON stored as string)
+  configuration   String?  // JSON string for template-specific config
+  
+  // SelfClaw: tokens deployed by this agent (kept so sponsorship works before SelfClaw indexes)
+  agentDeployedTokens String?  // JSON: [{ address, name, symbol, deployedAt }]
+  
+  // Relations
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id])
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deployedAt      DateTime?
+  
+  transactions      Transaction[]
+  activityLogs      ActivityLog[]
+  channelBindings   ChannelBinding[]
+  verification      AgentVerification?
+  agentTasks        AgentTask[]
+}
+
+// ─── OpenClaw Channel Binding ──────────────────────────────────────────────
+// Maps a sender on a channel to an AgentHaus agent.
+// Created when a user sends a pairing code to the shared bot,
+// or auto-created for dedicated per-agent bots (Telegram, Discord).
+//
+// Routing: (channelType + senderIdentifier) → agentId
+// One active binding per sender per channel type at a time.
+
+model ChannelBinding {
+  id                String   @id @default(uuid())
+  
+  agentId           String
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Channel identification
+  channelType       String   // whatsapp, telegram, discord, imessage, web
+  senderIdentifier  String   // e.g. "+15555550123", "telegram:12345", "discord:98765"
+  senderName        String?  // display name at pairing time
+  chatIdentifier    String?  // group/channel ID (for group chats)
+  
+  // Pairing metadata
+  pairingCode       String?  // the code used to pair (for audit)
+  bindingType       String   @default("pairing") // "pairing" (shared bot) | "dedicated" (per-agent bot) | "direct" (web)
+  
+  // State
+  isActive          Boolean  @default(true)
+  
+  // Timestamps
+  pairedAt          DateTime @default(now())
+  lastMessageAt     DateTime @default(now())
+  
+  // Conversation session
+  sessionMessages   SessionMessage[]
+  
+  // Unique constraint: only one *active* binding per sender per channel.
+  //
+  // The original schema enforced this with a composite unique index that
+  // included `isActive`. That caused errors whenever we deactivated a
+  // binding: updating `isActive` from `true`→`false` would conflict with any
+  // existing inactive row for the same sender since the pair
+  // (channelType,senderIdentifier,false) would already exist. The runtime
+  // error looked like `P2002 Unique constraint failed on the fields:
+  // ("channelType","senderIdentifier","isActive")` and occurred when
+  // pairing a second bot via Telegram or other channel.
+  //
+  // To fix this we remove `isActive` from the unique key and rely on
+  // application logic to maintain at most one active binding. The `updateMany`
+  // calls already deactivate any existing active records before creating a
+  // new one, so the invariant is preserved. If you need a database-level
+  // guarantee you can add a *partial* unique index manually with SQL:
+  //
+  //   CREATE UNIQUE INDEX "ChannelBinding_active_unique"
+  //   ON "ChannelBinding" ("channelType", "senderIdentifier")
+  //   WHERE "isActive" = TRUE;
+  //
+  // Prisma doesn't yet support partial indexes directly, so manual migration
+  // is required if you want that level of protection. For now we rely solely
+  // on application logic to ensure only one active binding per sender/channel.
+  // The `updateMany` calls deactivate any existing active binding before a new
+  // row is created, which preserves the invariant. This avoids both the
+  // P2002 error and any risk of data loss from a broad unique constraint.
+  //
+  // If you want to enforce it at the database level you can create a partial
+  // unique index manually:
+  //
+  //   CREATE UNIQUE INDEX "ChannelBinding_active_unique"
+  //   ON "ChannelBinding" ("channelType", "senderIdentifier")
+  //   WHERE "isActive" = TRUE;
+  //
+  // The following non-unique indexes remain for performance.
+
+  @@index([agentId])
+  @@index([userId])
+  @@index([channelType, senderIdentifier])
+}
+
+// ─── Session Messages ──────────────────────────────────────────────────────
+// Persistent conversation history for each channel binding.
+// Replaces the in-memory / activity-log-based history hack.
+// Loaded by processMessage() for context continuity across restarts.
+
+model SessionMessage {
+  id                String   @id @default(uuid())
+  
+  bindingId         String
+  binding           ChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  
+  role              String   // "user" | "assistant" | "system"
+  content           String
+  
+  // Optional metadata — tx results, skill outputs, etc.
+  metadata          String?  // JSON
+  
+  createdAt         DateTime @default(now())
+  
+  @@index([bindingId, createdAt])
+}
+
+// ─── SelfClaw Agent Verification ─────────────────────────────────────────────
+// Stores verification state from SelfClaw (selfclaw.ai).
+// Each agent can be verified via SelfClaw's Self.xyz passport-based ZK proof.
+// This proves a real human backs the agent — without exposing personal data.
+
+model AgentVerification {
+  id                  String   @id @default(uuid())
+  
+  agentId             String   @unique
+  agent               Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  // Ed25519 key pair (SPKI base64 public key, AES-encrypted private key)
+  publicKey           String   // Ed25519 public key in SPKI base64
+  encryptedPrivateKey String   // AES-256-GCM encrypted Ed25519 private key (hex)
+  
+  // Verification state
+  status              String   @default("pending") // pending, challenge_signed, qr_ready, verified, failed, expired
+  sessionId           String?  // SelfClaw session ID
+  challenge           String?  // Challenge string from SelfClaw (to be signed)
+  
+  // Data returned after verification
+  humanId             String?  // Privacy-preserving human identifier
+  agentKeyHash        String?  // SHA-256 of agent public key
+  agentName           String?  // Name registered with SelfClaw
+  swarmUrl            String?  // URL to view all agents by this human
+  
+  // Self.xyz specific
+  selfxyzVerified     Boolean  @default(false)
+  selfxyzRegisteredAt DateTime?
+  
+  // QR code / Self app configuration (JSON from SelfClaw)
+  selfAppConfig       String?  // JSON: Self.xyz QR code config
+
+  // SelfClaw agent-api key (Bearer sclaw_...) — for feed, skills, services, briefing
+  // User provides in chat; agent saves via [[SAVE_SELFCLAW_API_KEY|sclaw_...]]
+  encryptedSelfclawApiKey String?  // AES-256-GCM encrypted
+  
+  // Timestamps
+  verifiedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// Persisted QR codes (for chat responses) so we can serve them via short URLs
+model QRCode {
+  id        String   @id @default(cuid())
+  agentId   String?  // optional link to agent
+  content   String   // original text/URL encoded
+  dataUrl   String   @db.Text // base64 PNG data
+  createdAt DateTime @default(now())
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id])
+  txHash        String?
+  type          String   // send, swap, register, tip
+  status        String   @default("pending") // pending, confirmed, failed
+  fromAddress   String?
+  toAddress     String?
+  amount        Float?
+  currency      String?
+  gasUsed       Float?
+  blockNumber   Int?
+  description   String?
+  createdAt     DateTime @default(now())
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id])
+  type        String   // action, error, info, warning
+  message     String
+  metadata    String?  // JSON string for additional data
+  createdAt   DateTime @default(now())
+}
+
+model AgentTask {
+  id             String   @id @default(uuid())
+  
+  // Relations
+  agentId        String
+  agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Execution Triggers (Can be Price-Based AND/OR Time-Based)
+  triggerType    String   // "price", "time", "cron"
+  
+  // ---> If Price-Based
+  tokenSymbol    String?  // e.g., "UGXm"
+  conditionType  String?  // "price_above", "price_below", "percentage_increase"
+  targetValue    Float?   // e.g., 3000 (absolute) or 10.0 (percentage)
+  baselinePrice  Float?   // Price at the time of task creation
+  
+  // ---> If Time-Based / CRON
+  executeAt      DateTime? // Exact time to execute (e.g., "Buy at 3:00 PM")
+  cronSchedule   String?   // e.g., "0 0 * * *" (for "Stake periodically every day")
+  lastExecutedAt DateTime? // Track when it last ran to prevent double-execution
+  
+  // Execution Payload
+  actionType     String   // "alert_telegram", "execute_trade", "execute_transfer", "execute_stake"
+  actionPayload  String   @db.Text // JSON string containing smart contract ABI, params, or swap paths
+  
+  // State
+  status         String   @default("active") // "active", "completed", "cancelled", "failed"
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([tokenSymbol, status]) 
+  @@index([executeAt, status])
+}

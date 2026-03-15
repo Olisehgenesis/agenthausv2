@@ -1,0 +1,111 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# AgentHaus .gitignore
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ─── Next.js ──────────────────────────────────────────────────────────────────
+/.next/
+/out/
+/build/
+next-env.d.ts
+
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+# CRITICAL: These contain mnemonic, API keys, encryption secrets
+.env
+.env.*
+!.env.example
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/migrations/
+
+# ─── Prisma Generated ────────────────────────────────────────────────────────
+/src/generated/prisma
+
+# ─── OpenClaw Agent Runtime ──────────────────────────────────────────────────
+.openclaw_agents/
+openclaw.json
+
+# ─── Keys & Certificates ─────────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+
+# ─── Wallet & Crypto ─────────────────────────────────────────────────────────
+# NEVER commit mnemonics, private keys, or keystore files
+*.keystore
+*.json.enc
+mnemonic.txt
+seed.txt
+private_key*
+keystore/
+
+# ─── OS Files ─────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─── IDE & Editor ─────────────────────────────────────────────────────────────
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# ─── Testing & Coverage ──────────────────────────────────────────────────────
+/coverage/
+*.lcov
+.nyc_output/
+
+# ─── Debug Logs ───────────────────────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# ─── TypeScript ───────────────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── Build Artifacts ─────────────────────────────────────────────────────────
+dist/
+*.map
+
+# ─── Vercel ───────────────────────────────────────────────────────────────────
+.vercel
+
+# ─── Turbo ────────────────────────────────────────────────────────────────────
+.turbo/
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.pid
+*.seed
+*.pid.lock
