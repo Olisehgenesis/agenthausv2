@@ -243,14 +243,7 @@ export default function HomePage() {
                     className="w-full h-full object-contain p-0.5"
                   />
                 </div>
-                {agent?.ensSubdomain ? (
-                  <>
-                    <span className="text-accent font-black">{agent.ensSubdomain}.agenthaus.eth</span>
-                    <span className="text-forest/50">is {agent?.status}</span>
-                  </>
-                ) : (
-                  <span>{agent?.name} is {agent?.status}</span>
-                )}
+                <span>{agent?.name} is {agent?.status}</span>
                 <span className="text-accent">#{agent?.erc8004?.agentId || "ERC-8004"}</span>
               </Link>
             ))}
@@ -266,6 +259,28 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+          {/* New Haus Names Showcase */}
+          {stats && stats.hausNamesCount > 0 && (
+            <div className="mt-12 bg-forest text-white p-6 border-4 border-forest shadow-hard">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-60">Registered Haus Names</h3>
+              <div className="flex flex-wrap gap-3">
+                {agents
+                  .filter(a => a.ensSubdomain)
+                  .map(a => (
+                    <div key={a.id} className="bg-white/10 hover:bg-white/20 border-2 border-white/20 px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors">
+                      {a.ensSubdomain}.agenthaus.eth
+                    </div>
+                  ))
+                }
+                {agents.filter(a => a.ensSubdomain).length < stats.hausNamesCount && (
+                  <div className="text-[10px] font-bold uppercase flex items-center opacity-40">
+                    + {stats.hausNamesCount - agents.filter(a => a.ensSubdomain).length} more names
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Roadmap Section */}

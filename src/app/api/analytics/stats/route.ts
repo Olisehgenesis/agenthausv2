@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const usersCount = await prisma.user.count();
@@ -48,13 +51,13 @@ export async function GET() {
     const transactionsCount = await prisma.transaction.count();
     const volumeAgg = await prisma.transaction.aggregate({ _sum: { amount: true } });
     const totalVolume = volumeAgg._sum.amount ?? 0;
-    let hausNamesCount = 0;
-    try {
-      hausNamesCount = await (prisma as any).ensSubdomain.count();
-    } catch {
-      // Table may not exist in all envs
-      hausNamesCount = 0;
-    }
+    
+    // Count based on both the EnsSubdomain table AND the ensSubdomain field on Agent
+    const hausNamesCount = await prisma.agent.count({
+      where: {
+        ensSubdomain: { not: null },
+      },
+    });
     const deploymentRate = totalAgents > 0 ? (deployedAgents / totalAgents) * 100 : 0;
     const activeRate = totalAgents > 0 ? (activeAgents / totalAgents) * 100 : 0;
     const averageAgentsPerUser = usersCount > 0 ? totalAgents / usersCount : 0;
