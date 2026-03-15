@@ -44,6 +44,23 @@ export function AgentIdentityCard({
         <CardTitle className="text-base">Agent Identity</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* ── ENS Subdomain ── */}
+        {agent.ensSubdomain && (
+          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-blue-400 font-medium">Digital Residency</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-mono text-blue-300">
+                {agent.ensSubdomain}.agenthaus.space
+              </span>
+              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/20">
+                <span className="text-[10px] text-blue-400 uppercase font-bold">ENS</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── ERC-8004 On-Chain Status ── */}
         {agent.erc8004AgentId ? (
           <>

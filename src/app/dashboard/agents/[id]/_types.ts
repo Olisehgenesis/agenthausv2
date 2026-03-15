@@ -26,6 +26,8 @@ export interface AgentData {
   exportedAt: string | null;
   createdAt: string;
   deployedAt: string | null;
+  ensSubdomain: string | null;
+  ensRegisteredAt: string | null;
   transactions: TransactionData[];
   activityLogs: ActivityLogData[];
   verification?: { publicKey: string } | null;

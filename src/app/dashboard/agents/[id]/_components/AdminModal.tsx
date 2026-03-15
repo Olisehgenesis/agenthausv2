@@ -61,6 +61,53 @@ export function AdminModal({
   const [socials, setSocials] = React.useState<{ telegram?: string, twitter?: string, website?: string }>(
     (agent as any).externalSocials ? JSON.parse((agent as any).externalSocials) : {}
   );
+  
+  // ENS subdomain state
+  const [subdomain, setSubdomain] = React.useState(agent.ensSubdomain || "");
+  const [registeringEns, setRegisteringEns] = React.useState(false);
+
+  const handleRegisterEns = async () => {
+    if (!subdomain || !hasUserAddress || !agent.owner?.walletAddress) return;
+    
+    setRegisteringEns(true);
+    try {
+      const confirmMsg = `To register ${subdomain}.agenthaus.space, please send 2 CELO to the treasury address. Do you want to proceed?`;
+      if (!window.confirm(confirmMsg)) {
+        setRegisteringEns(false);
+        return;
+      }
+
+      const hash = prompt("Please enter the transaction hash after sending 2 CELO:");
+      if (!hash) {
+        setRegisteringEns(false);
+        return;
+      }
+
+      const res = await fetch("/api/ens/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: agent.id,
+          subdomain: subdomain,
+          txHash: hash
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Registered ${subdomain}.agenthaus.space!`);
+        agent.ensSubdomain = subdomain;
+        onSocialsUpdated?.(); // Trigger refresh
+      } else {
+        toast.error(data.message || "Registration failed");
+      }
+    } catch (err) {
+      toast.error("An error occurred during registration");
+    } finally {
+      setRegisteringEns(false);
+    }
+  };
+
   const [showTelegramForm, setShowTelegramForm] = React.useState(false);
   const [telegramToken, setTelegramToken] = React.useState("");
   const [telegramConnecting, setTelegramConnecting] = React.useState(false);
@@ -243,6 +290,55 @@ export function AdminModal({
     <Modal open={open} onClose={onClose} className="max-w-md max-h-[90vh] overflow-auto">
       <div className="p-6 space-y-5">
         <h2 className="text-lg font-semibold text-forest">Admin</h2>
+
+        {/* ENS Subdomain Section */}
+        <div className="p-4 rounded-xl bg-forest/5 border border-forest/10 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-forest/20 flex items-center justify-center">
+              <span className="text-lg">🌐</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-forest">ENS Subdomain</h3>
+              <p className="text-[10px] text-forest-muted">Digital residency for your agent</p>
+            </div>
+          </div>
+
+          {agent.ensSubdomain ? (
+            <div className="flex items-center justify-between p-2 rounded-lg bg-forest/10 border border-forest/20">
+              <span className="text-sm font-mono text-forest">
+                {agent.ensSubdomain}.agenthaus.space
+              </span>
+              <CheckCircle className="w-4 h-4 text-forest" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="agent-name"
+                  value={subdomain}
+                  onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  className="h-9 text-xs bg-white border-forest/10"
+                />
+                <span className="text-xs text-forest-muted">.agenthaus.space</span>
+              </div>
+              <p className="text-[10px] text-forest-muted">
+                Fee: <span className="text-forest font-bold">2 CELO</span> (~$0.50 USDT)
+              </p>
+              <Button
+                size="sm"
+                className="w-full text-xs"
+                disabled={!subdomain || registeringEns || !hasUserAddress}
+                onClick={handleRegisterEns}
+              >
+                {registeringEns ? (
+                  <><Loader2 className="w-3 h-3 animate-spin mr-2" /> Registering...</>
+                ) : (
+                  "Register Subdomain"
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* System Prompt Section */}
         <div>

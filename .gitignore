@@ -109,3 +109,6 @@ dist/
 *.pid
 *.seed
 *.pid.lock
+
+# Synthesis hackathon data
+synthesis_data.md

@@ -84,6 +84,11 @@ model Agent {
   // Configuration (JSON stored as string)
   configuration   String?  // JSON string for template-specific config
   
+  // ENS Subdomain (agenthaus.space)
+  ensSubdomain    String?  @unique
+  ensNode         String?  @unique // Namehash of the subdomain
+  ensRegisteredAt DateTime?
+  
   // SelfClaw: tokens deployed by this agent (kept so sponsorship works before SelfClaw indexes)
   agentDeployedTokens String?  // JSON: [{ address, name, symbol, deployedAt }]
   
@@ -101,6 +106,7 @@ model Agent {
   channelBindings   ChannelBinding[]
   verification      AgentVerification?
   agentTasks        AgentTask[]
+  ensRegistration   EnsSubdomain?
 }
 
 // ─── OpenClaw Channel Binding ──────────────────────────────────────────────
@@ -318,4 +324,26 @@ model AgentTask {
   
   @@index([tokenSymbol, status]) 
   @@index([executeAt, status])
+}
+
+model EnsSubdomain {
+  id              String   @id @default(uuid())
+  name            String   @unique // e.g. "genesis"
+  fullName        String   @unique // e.g. "genesis.agenthaus.space"
+  node            String   @unique // Namehash
+  
+  // Ownership
+  ownerAddress    String   // The human or agent address that "owns" the right to this subdomain
+  isAgentOwned    Boolean  @default(false)
+  
+  // Links
+  agentId         String?  @unique
+  agent           Agent?   @relation(fields: [agentId], references: [id])
+  
+  // History
+  registeredAt    DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Metadata
+  txHash          String?  // The USDT payment or transfer tx hash
 }
