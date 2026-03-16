@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma, withPrismaRetry } from "@/lib/db";
 import { getNextDerivationIndex, deriveAddress } from "@/lib/blockchain/wallet";
 
 // GET /api/agents - List all agents for a user
@@ -13,36 +13,40 @@ export async function GET(request: Request) {
     }
 
     // Find user
-    const user = await prisma.user.findUnique({
-      where: { walletAddress: ownerAddress },
-    });
+    const user = await withPrismaRetry((db) =>
+      db.user.findUnique({
+        where: { walletAddress: ownerAddress },
+      })
+    );
 
     if (!user) {
       return NextResponse.json({ agents: [] });
     }
 
-    const agents = await prisma.agent.findMany({
-      where: { ownerId: user.id },
-      orderBy: { createdAt: "desc" },
-      include: {
-        transactions: {
-          orderBy: { createdAt: "desc" },
-          take: 5,
-        },
-        activityLogs: {
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        },
-        verification: {
-          select: {
-            selfxyzVerified: true,
-            humanId: true,
-            verifiedAt: true,
-            publicKey: true,
+    const agents = await withPrismaRetry((db) =>
+      db.agent.findMany({
+        where: { ownerId: user.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          transactions: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          },
+          activityLogs: {
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          },
+          verification: {
+            select: {
+              selfxyzVerified: true,
+              humanId: true,
+              verifiedAt: true,
+              publicKey: true,
+            },
           },
         },
-      },
-    });
+      })
+    );
 
     return NextResponse.json({ agents });
   } catch (error) {
@@ -83,16 +87,20 @@ export async function POST(request: Request) {
     }
 
     // Find or create user
-    let user = await prisma.user.findUnique({
-      where: { walletAddress: ownerAddress },
-    });
+    let user = await withPrismaRetry((db) =>
+      db.user.findUnique({
+        where: { walletAddress: ownerAddress },
+      })
+    );
 
     if (!user) {
-      user = await prisma.user.create({
-        data: {
-          walletAddress: ownerAddress,
-        },
-      });
+      user = await withPrismaRetry((db) =>
+        db.user.create({
+          data: {
+            walletAddress: ownerAddress,
+          },
+        })
+      );
     }
 
     // Wallet assignment based on walletOption
@@ -116,66 +124,74 @@ export async function POST(request: Request) {
     // Create agent in database with status "deploying".
     // The client will trigger ERC-8004 on-chain registration (wallet signature),
     // then call /api/agents/{id}/deploy to activate once the tx confirms.
-    const agent = await prisma.agent.create({
-      data: {
-        name,
-        description,
-        templateType,
-        systemPrompt,
-        llmProvider: llmProvider || "groq",
-        llmModel: llmModel || "llama-3.3-70b-versatile",
-        spendingLimit: spendingLimit || 100,
-        configuration: configuration ? JSON.stringify(configuration) : null,
-        ownerId: user.id,
-        agentWalletAddress,
-        walletDerivationIndex,
-        status: source === "import" ? "active" : "deploying",
-        deployedAt: source === "import" ? new Date() : null,
-        erc8004AgentId: erc8004AgentId || externalAgentId,
-        erc8004ChainId: erc8004ChainId ? parseInt(erc8004ChainId) : undefined,
-        erc8004URI,
-        verification: publicKey ? {
-          create: {
-            publicKey,
-            encryptedPrivateKey: "", // No private key for imported agents
-            status: "verified",
-          }
-        } : undefined,
-      },
-    });
+    const agent = await withPrismaRetry((db) =>
+      db.agent.create({
+        data: {
+          name,
+          description,
+          templateType,
+          systemPrompt,
+          llmProvider: llmProvider || "groq",
+          llmModel: llmModel || "llama-3.3-70b-versatile",
+          spendingLimit: spendingLimit || 100,
+          configuration: configuration ? JSON.stringify(configuration) : null,
+          ownerId: user.id,
+          agentWalletAddress,
+          walletDerivationIndex,
+          status: source === "import" ? "active" : "deploying",
+          deployedAt: source === "import" ? new Date() : null,
+          erc8004AgentId: erc8004AgentId || externalAgentId,
+          erc8004ChainId: erc8004ChainId ? parseInt(erc8004ChainId) : undefined,
+          erc8004URI,
+          verification: publicKey ? {
+            create: {
+              publicKey,
+              encryptedPrivateKey: "", // No private key for imported agents
+              status: "verified",
+            }
+          } : undefined,
+        },
+      })
+    );
     
     const activityMessage = source === "import" 
       ? `Agent "${name}" imported from ${erc8004ChainId ? `chain ${erc8004ChainId}` : "external source"}`
       : `Agent "${name}" created with ${llmProvider || "groq"}/${llmModel || "default"}`;
 
     if (agentWalletAddress) {
-      await prisma.activityLog.create({
+      await withPrismaRetry((db) =>
+        db.activityLog.create({
+          data: {
+            agentId: agent.id,
+            type: "info",
+            message:
+              effectiveWalletOption === "owner"
+                ? `Using owner wallet: ${agentWalletAddress}`
+                : `HD wallet derived: ${agentWalletAddress}`,
+          },
+        })
+      );
+    }
+
+    await withPrismaRetry((db) =>
+      db.activityLog.create({
         data: {
           agentId: agent.id,
           type: "info",
-          message:
-            effectiveWalletOption === "owner"
-              ? `Using owner wallet: ${agentWalletAddress}`
-              : `HD wallet derived: ${agentWalletAddress}`,
+          message: "Agent created — awaiting on-chain ERC-8004 registration to activate.",
         },
-      });
-    }
-
-    await prisma.activityLog.create({
-      data: {
-        agentId: agent.id,
-        type: "info",
-        message: "Agent created — awaiting on-chain ERC-8004 registration to activate.",
-      },
-    });
+      })
+    );
 
     // Return the created agent
-    const createdAgent = await prisma.agent.findUnique({
-      where: { id: agent.id },
-      include: {
-        activityLogs: { orderBy: { createdAt: "desc" }, take: 5 },
-      },
-    });
+    const createdAgent = await withPrismaRetry((db) =>
+      db.agent.findUnique({
+        where: { id: agent.id },
+        include: {
+          activityLogs: { orderBy: { createdAt: "desc" }, take: 5 },
+        },
+      })
+    );
 
     return NextResponse.json(createdAgent, { status: 201 });
   } catch (error) {

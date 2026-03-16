@@ -2,23 +2,35 @@
 
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount, useSendTransaction } from "wagmi";
-import { parseEther, type Address, encodeFunctionData } from "viem";
+import { useAccount, useSendTransaction, useBalance, usePublicClient } from "wagmi";
+import { formatUnits, type Address, type Hash, encodeFunctionData } from "viem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Modal } from "@/components/ui/modal";
 import {
   Loader2, Globe, CheckCircle, ArrowLeft, Wallet,
-  AlertCircle, Bot, Plus, Download, X,
+  AlertCircle, Bot, Plus, Download, Copy, ExternalLink, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { FEE_TOKENS, prepareCeloTransaction } from "@/lib/transactions/fee-abstraction";
+import { prepareCeloTransaction } from "@/lib/transactions/fee-abstraction";
 import Link from "next/link";
-import { getHausNamePrice, formatHausNamePrice } from "@/lib/pricing";
+import { getHausNamePrice } from "@/lib/pricing";
 
-const REGISTRAR_ADDRESS = "0x5785A2422d51c841C19773161213ECD12dBB50d4";
+const REGISTRAR_ADDRESS = "0xcf5D3d90DB4129D1063d8ad0942B375691ef6a2a";
+const CELO_MAINNET_CHAIN_ID = 42220;
 
 const registrarAbi = [
+  {
+    name: "getRegistrationFee",
+    type: "function",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "token", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
   {
     name: "registerSubdomain",
     type: "function",
@@ -26,30 +38,109 @@ const registrarAbi = [
       { name: "name", type: "string" },
       { name: "targetOwner", type: "address" },
       { name: "token", type: "address" },
+      { name: "maxAmount", type: "uint256" },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
 ] as const;
 
+const erc20Abi = [
+  {
+    name: "symbol",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    name: "allowance",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+const registrarTokenAbi = [
+  {
+    name: "getSupportedTokens",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    name: "supportedTokens",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [
+      { name: "enabled", type: "bool" },
+      { name: "fee", type: "uint256" },
+    ],
+  },
+  {
+    name: "tokenDecimals",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint8" }],
+  },
+] as const;
+
 type View = "buy" | "import";
+type PaymentTokenOption = { symbol: string; address: Address; decimals: number };
+
+function maskContractAddress(address?: string): string {
+  if (!address) return "-";
+  if (address.length < 9) return address;
+  return `${address.slice(0, 5)}...${address.slice(-3)}`;
+}
 
 export default function EnsBuyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialAgentId = searchParams.get("agentId");
 
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const [agents, setAgents] = React.useState<any[]>([]);
   const [selectedAgentId, setSelectedAgentId] = React.useState(initialAgentId || "");
   const [subdomain, setSubdomain] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [registering, setRegistering] = React.useState(false);
-  const [paymentToken, setPaymentToken] = React.useState<any>(FEE_TOKENS.USDT);
+  const [supportedTokens, setSupportedTokens] = React.useState<PaymentTokenOption[]>([]);
+  const [paymentToken, setPaymentToken] = React.useState<PaymentTokenOption | null>(null);
+  const [onChainFee, setOnChainFee] = React.useState<string | null>(null);
+  const [feeLoading, setFeeLoading] = React.useState(false);
+  const [approvalRequired, setApprovalRequired] = React.useState(false);
+  const [approvalCheckLoading, setApprovalCheckLoading] = React.useState(false);
+  const [txError, setTxError] = React.useState<string | null>(null);
+  const [showBuyModal, setShowBuyModal] = React.useState(false);
   const [view, setView] = React.useState<View>("buy");
   const [paymentMethod, setPaymentMethod] = React.useState<"x402" | "onchain">(
     (searchParams.get("method") as any) === "x402" ? "x402" : "onchain"
   );
+
+  const { data: selectedTokenBalance } = useBalance({
+    address,
+    token: paymentToken?.address,
+  });
+
+  const currentPrice = getHausNamePrice(subdomain);
 
   // Import form state
   const [importName, setImportName] = React.useState("");
@@ -64,6 +155,8 @@ export default function EnsBuyPage() {
   const [discovering, setDiscovering] = React.useState(false);
 
   const { sendTransactionAsync } = useSendTransaction();
+  const publicClient = usePublicClient();
+  const isOnchainCeloSupported = chainId === CELO_MAINNET_CHAIN_ID;
 
   const fetchAgents = React.useCallback(() => {
     if (!address) return;
@@ -83,6 +176,163 @@ export default function EnsBuyPage() {
   React.useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
+
+  React.useEffect(() => {
+    if (!isOnchainCeloSupported && paymentMethod === "onchain") {
+      setPaymentMethod("x402");
+    }
+  }, [isOnchainCeloSupported, paymentMethod]);
+
+  React.useEffect(() => {
+    if (!publicClient || !isOnchainCeloSupported) {
+      setSupportedTokens([]);
+      setPaymentToken(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    (async () => {
+      try {
+        const tokenAddresses = (await publicClient.readContract({
+          address: REGISTRAR_ADDRESS as Address,
+          abi: registrarTokenAbi,
+          functionName: "getSupportedTokens",
+        })) as Address[];
+
+        const entries = await Promise.all(
+          tokenAddresses.map(async (tokenAddress) => {
+            const [tokenInfo, decimals, symbol] = await Promise.all([
+              publicClient.readContract({
+                address: REGISTRAR_ADDRESS as Address,
+                abi: registrarTokenAbi,
+                functionName: "supportedTokens",
+                args: [tokenAddress],
+              }) as Promise<readonly [boolean, bigint]>,
+              publicClient.readContract({
+                address: REGISTRAR_ADDRESS as Address,
+                abi: registrarTokenAbi,
+                functionName: "tokenDecimals",
+                args: [tokenAddress],
+              }) as Promise<number>,
+              publicClient.readContract({
+                address: tokenAddress,
+                abi: erc20Abi,
+                functionName: "symbol",
+              }).catch(() => "TOKEN"),
+            ]);
+
+            if (!tokenInfo[0]) return null;
+
+            return {
+              symbol: String(symbol),
+              address: tokenAddress,
+              decimals: Number(decimals),
+            } as PaymentTokenOption;
+          })
+        );
+
+        const enabledTokens = entries.filter((t): t is PaymentTokenOption => !!t);
+
+        if (!isCancelled) {
+          setSupportedTokens(enabledTokens);
+          setPaymentToken((prev) => {
+            if (prev && enabledTokens.some((t) => t.address.toLowerCase() === prev.address.toLowerCase())) {
+              return prev;
+            }
+            return enabledTokens[0] ?? null;
+          });
+        }
+      } catch {
+        if (!isCancelled) {
+          setSupportedTokens([]);
+          setPaymentToken(null);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [publicClient, isOnchainCeloSupported]);
+
+  React.useEffect(() => {
+    const cleanName = subdomain.toLowerCase().trim();
+    if (paymentMethod !== "onchain" || !publicClient || !paymentToken || cleanName.length < 3 || cleanName.length > 20) {
+      setOnChainFee(null);
+      return;
+    }
+
+    let isCancelled = false;
+    setFeeLoading(true);
+
+    publicClient
+      .readContract({
+        address: REGISTRAR_ADDRESS as Address,
+        abi: registrarAbi,
+        functionName: "getRegistrationFee",
+        args: [cleanName, paymentToken.address as Address],
+      })
+      .then((feeRaw) => {
+        if (isCancelled) return;
+        const formatted = formatUnits(feeRaw as bigint, paymentToken.decimals);
+        setOnChainFee(formatted);
+      })
+      .catch(() => {
+        if (!isCancelled) setOnChainFee(null);
+      })
+      .finally(() => {
+        if (!isCancelled) setFeeLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [paymentMethod, paymentToken, publicClient, subdomain]);
+
+  React.useEffect(() => {
+    if (paymentMethod !== "onchain" || !publicClient || !address || !paymentToken || feeLoading || !onChainFee) {
+      setApprovalRequired(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setApprovalCheckLoading(true);
+
+    (async () => {
+      try {
+        const feeRaw = (await publicClient.readContract({
+          address: REGISTRAR_ADDRESS as Address,
+          abi: registrarAbi,
+          functionName: "getRegistrationFee",
+          args: [subdomain.toLowerCase().trim(), paymentToken.address as Address],
+        })) as bigint;
+
+        const allowance = (await publicClient.readContract({
+          address: paymentToken.address as Address,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [address, REGISTRAR_ADDRESS as Address],
+        })) as bigint;
+
+        if (!isCancelled) {
+          setApprovalRequired(allowance < feeRaw);
+        }
+      } catch {
+        if (!isCancelled) {
+          setApprovalRequired(false);
+        }
+      } finally {
+        if (!isCancelled) {
+          setApprovalCheckLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [paymentMethod, publicClient, address, paymentToken, onChainFee, feeLoading]);
 
   // ── Import agent logic ───────────────────────────────────
   const fetchMetadata = async () => {
@@ -164,16 +414,13 @@ export default function EnsBuyPage() {
 
   // ── Buy / register handler ───────────────────────────────
   const handleBuy = async () => {
-    if (!address || !selectedAgentId || !subdomain) return;
+    if (!address || !selectedAgentId || !subdomain || !publicClient) return;
     setRegistering(true);
-    
-    const isX402 = searchParams.get("method") === "x402";
+    setTxError(null);
 
     try {
       const selectedAgent = agents.find((a) => a.id === selectedAgentId);
       if (!selectedAgent) throw new Error("Agent not found");
-
-      const currentPrice = getHausNamePrice(subdomain);
 
       if (paymentMethod === "x402") {
         // x402 Gasless Flow
@@ -206,11 +453,63 @@ export default function EnsBuyPage() {
           throw new Error(error.error || "x402 Registration failed");
         }
       } else {
-        // Original Contract Flow
+        if (!isOnchainCeloSupported) {
+          throw new Error("On-chain ENS payment is supported on Celo Mainnet only.");
+        }
+
+        if (!paymentToken) {
+          throw new Error("No payment token available");
+        }
+
+        // On-chain flow: ensure selected token approval, then call registrar.
+        const feeRaw = (await publicClient.readContract({
+          address: REGISTRAR_ADDRESS as Address,
+          abi: registrarAbi,
+          functionName: "getRegistrationFee",
+          args: [subdomain.toLowerCase().trim(), paymentToken.address as Address],
+        })) as bigint;
+
+        if (feeRaw <= BigInt(0)) {
+          throw new Error(`${paymentToken.symbol} is not enabled in registrar`);
+        }
+
+        const allowance = (await publicClient.readContract({
+          address: paymentToken.address as Address,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [address, REGISTRAR_ADDRESS as Address],
+        })) as bigint;
+
+        if (allowance < feeRaw) {
+          const approveData = encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [REGISTRAR_ADDRESS as Address, feeRaw],
+          });
+
+          const approveRequest = await prepareCeloTransaction(address, {
+            to: paymentToken.address as Address,
+            data: approveData,
+          });
+
+          toast.info(`Approving ${paymentToken.symbol} for registrar...`);
+          const approveHash = await sendTransactionAsync(approveRequest as any);
+          const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash as Hash });
+
+          if (approveReceipt.status !== "success") {
+            throw new Error("Token approval failed");
+          }
+        }
+
         const txData = encodeFunctionData({
           abi: registrarAbi,
           functionName: "registerSubdomain",
-          args: [subdomain, selectedAgent.agentWalletAddress as Address, paymentToken.address as Address],
+          args: [
+            subdomain.toLowerCase().trim(),
+            selectedAgent.agentWalletAddress as Address,
+            paymentToken.address as Address,
+            feeRaw,
+          ],
         });
 
         const txRequest = await prepareCeloTransaction(address, {
@@ -219,28 +518,47 @@ export default function EnsBuyPage() {
         });
 
         const hash = await sendTransactionAsync(txRequest as any);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as Hash });
 
-        const res = await fetch("/api/ens/register", {
+        if (receipt.status !== "success") {
+          throw new Error("Registration transaction failed");
+        }
+
+        const payload = {
+          agentId: selectedAgent.id,
+          subdomain,
+          txHash: hash,
+          ownerAddress: address,
+        };
+
+        let res = await fetch("/api/ens/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agentId: selectedAgent.id,
-            subdomain,
-            txHash: hash,
-            ownerAddress: address,
-          }),
+          body: JSON.stringify(payload),
         });
+
+        // If backend had a transient issue (e.g. DB reconnect), retry once.
+        if (!res.ok) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          res = await fetch("/api/ens/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        }
 
         if (res.ok) {
           toast.success(`Registered ${subdomain}.agenthaus.eth!`);
           router.push(`/dashboard/agents/${selectedAgent.id}`);
         } else {
           const error = await res.json();
-          toast.error(error.message || "Registration failed on backend, but transaction succeeded.");
+          toast.error(error.message || `Payment confirmed on-chain (tx: ${hash.slice(0, 10)}...), but backend sync failed. Please retry.`);
         }
       }
     } catch (err: any) {
-      toast.error(err.message || "An error occurred");
+      const message = err?.shortMessage || err?.message || "An error occurred";
+      setTxError(message);
+      toast.error(message);
     } finally {
       setRegistering(false);
     }
@@ -512,8 +830,11 @@ export default function EnsBuyPage() {
   }
 
   const isX402 = searchParams.get("method") === "x402";
+  const uiPrice = paymentMethod === "onchain" ? (onChainFee ?? currentPrice) : currentPrice;
+  const numericUiPrice = Number(uiPrice || "0");
+  const ownedEnsAgents = agents.filter((a) => !!a.ensSubdomain);
 
-  // ── Main buy form (has agents) ───────────────────────────
+  // ── Main buy page (overview + modal trigger) ─────────────
   return (
     <div className="min-h-screen bg-gypsum p-4 sm:p-8">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -530,20 +851,94 @@ export default function EnsBuyPage() {
                 <Globe className="w-6 h-6 text-forest" />
               </div>
               <CardTitle className="text-2xl font-black uppercase tracking-tighter text-forest">
-                Buy Haus Name {isX402 && <span className="text-xs bg-forest text-white px-2 py-0.5 ml-2">x402 Gasless</span>}
+                My Haus Names
               </CardTitle>
             </div>
             <CardDescription className="font-bold uppercase text-forest/60">
-              {isX402 ? "Secure a haus name without paying gas fees." : "Secure a human-readable ENS subdomain for your agent on Celo."}
+              Names currently linked to your agents
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Agent Selection */}
+          <CardContent className="space-y-4">
+            {ownedEnsAgents.length === 0 ? (
+              <div className="p-4 border-2 border-dashed border-forest/20 bg-gypsum text-center text-sm font-bold text-forest/60">
+                No ENS names yet. Claim your first one.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {ownedEnsAgents.map((agent) => (
+                  <div key={agent.id} className="p-3 border-2 border-forest/20 bg-white flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black text-forest">{agent.ensSubdomain}.agenthaus.eth</div>
+                      <div className="text-[10px] font-bold text-forest/60">Agent: {agent.name}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="h-8 px-2 border-2 border-forest/20 bg-white hover:bg-forest/5 text-forest text-[10px] font-black uppercase flex items-center gap-1"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${agent.ensSubdomain}.agenthaus.eth`);
+                          toast.success("ENS name copied");
+                        }}
+                        title="Copy ENS name"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Copy
+                      </button>
+                      <Link
+                        href={`/dashboard/agents/${agent.id}`}
+                        className="h-8 px-2 border-2 border-forest/20 bg-white hover:bg-forest/5 text-forest text-[10px] font-black uppercase flex items-center gap-1"
+                        title="Open agent"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Open
+                      </Link>
+                      <button
+                        type="button"
+                        className="h-8 px-2 border-2 border-forest bg-forest text-white hover:bg-forest/90 text-[10px] font-black uppercase flex items-center gap-1"
+                        onClick={() => {
+                          setSelectedAgentId(agent.id);
+                          setShowBuyModal(true);
+                        }}
+                        title="Re-tag this agent"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Re-tag
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button className="flex-1" onClick={() => { setView("buy"); setShowBuyModal(true); }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Buy New Haus Name
+              </Button>
+              <Button variant="outline" className="border-2 border-forest" onClick={() => setView("import")}>
+                <Download className="w-4 h-4 mr-2" />
+                Import Agent
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Modal open={showBuyModal} onClose={() => setShowBuyModal(false)} className="max-w-3xl">
+          <div className="p-6 space-y-6">
+            <div>
+              <h2 className="text-2xl font-black uppercase tracking-tighter text-forest">
+                Buy Haus Name {isX402 && <span className="text-xs bg-forest text-white px-2 py-0.5 ml-2">x402 Gasless</span>}
+              </h2>
+              <p className="text-xs font-bold uppercase text-forest/60 mt-1">
+                {isX402 ? "Secure a haus name without paying gas fees." : "Secure a human-readable ENS subdomain for your agent on Celo."}
+              </p>
+            </div>
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-black uppercase text-forest">Select Agent</label>
                 <button
-                  onClick={() => setView("import")}
+                  onClick={() => { setShowBuyModal(false); setView("import"); }}
                   className="text-[10px] font-black uppercase text-accent underline underline-offset-2 hover:no-underline"
                 >
                   + Import agent
@@ -564,7 +959,6 @@ export default function EnsBuyPage() {
               </select>
             </div>
 
-            {/* Subdomain Input */}
             <div className="space-y-2">
               <label className="text-xs font-black uppercase text-forest">Choose Haus Name</label>
               <div className="flex items-center gap-0 border-2 border-forest overflow-hidden">
@@ -577,33 +971,33 @@ export default function EnsBuyPage() {
                 <span className="text-sm font-black text-white bg-forest px-3 py-3 whitespace-nowrap">.agenthaus.eth</span>
               </div>
               <p className="text-[10px] font-bold uppercase text-forest/50">
-                Min 3 chars. Letters, numbers, hyphens only.
+                3-20 chars. Letters, numbers, hyphens only.
               </p>
             </div>
 
-            {/* Payment Options */}
             <div className="space-y-4">
               <label className="text-xs font-black uppercase text-forest border-b-2 border-forest pb-1 block">
                 Payment Method & Pricing
               </label>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setPaymentMethod("onchain")}
+                  disabled={!isOnchainCeloSupported}
                   className={`p-4 border-2 flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "onchain" 
-                      ? "border-forest bg-forest text-white shadow-hard" 
+                    paymentMethod === "onchain"
+                      ? "border-forest bg-forest text-white shadow-hard"
                       : "border-forest/20 bg-white text-forest/40 hover:border-forest/40"
                   }`}
                 >
                   <Wallet className="w-5 h-5" />
-                  <span className="text-[10px] font-black uppercase">Connected Wallet</span>
+                  <span className="text-[10px] font-black uppercase">On-chain (Celo)</span>
                 </button>
                 <button
                   onClick={() => setPaymentMethod("x402")}
                   className={`p-4 border-2 flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "x402" 
-                      ? "border-forest bg-forest text-white shadow-hard" 
+                    paymentMethod === "x402"
+                      ? "border-forest bg-forest text-white shadow-hard"
                       : "border-forest/20 bg-white text-forest/40 hover:border-forest/40"
                   }`}
                 >
@@ -614,22 +1008,31 @@ export default function EnsBuyPage() {
 
               {paymentMethod === "onchain" && (
                 <div className="space-y-3 pt-2">
-                  <div className="grid grid-cols-4 gap-2">
-                    {[FEE_TOKENS.USDT, FEE_TOKENS.USDC, FEE_TOKENS.cUSD, FEE_TOKENS.CELO].map((token) => (
-                      <button
-                        key={token.symbol}
-                        onClick={() => setPaymentToken(token)}
-                        className={`flex flex-col items-center p-3 border-2 transition-all font-bold ${
-                          paymentToken.symbol === token.symbol
-                            ? "bg-forest border-forest text-white shadow-hard"
-                            : "bg-white border-forest/20 text-forest hover:border-forest"
-                        }`}
-                      >
-                        <span className="text-[9px] uppercase opacity-70 mb-0.5">{token.symbol === "CELO" ? "Native" : "Stable"}</span>
-                        <span className="text-sm">{token.symbol}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {supportedTokens.length === 0 ? (
+                    <div className="p-3 border-2 border-red-200 bg-red-50 text-[10px] font-bold text-red-700">
+                      No payment tokens are configured in registrar yet. Admin should call addSupportedToken first.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {supportedTokens.map((token) => {
+                        const isSelected = paymentToken?.address.toLowerCase() === token.address.toLowerCase();
+
+                        return (
+                          <button
+                            key={token.symbol}
+                            onClick={() => setPaymentToken(token)}
+                            className={`flex flex-col items-center p-3 border-2 transition-all font-bold ${
+                              isSelected
+                                ? "bg-forest border-forest text-white shadow-hard"
+                                : "bg-white border-forest/20 text-forest hover:border-forest"
+                            }`}
+                          >
+                            <span className="text-sm">{token.symbol}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -640,39 +1043,49 @@ export default function EnsBuyPage() {
                 <div>
                   <div className="text-[10px] font-black uppercase text-forest/60">Estimated Registration Fee</div>
                   <div className="text-3xl font-black text-forest tracking-tighter">
-                    {formatHausNamePrice(subdomain, paymentMethod === "onchain" ? paymentToken.symbol : "USDC")}
+                    {`${Number(uiPrice || "0").toFixed(2)} ${paymentMethod === "onchain" ? (paymentToken?.symbol || "TOKEN") : "USDC"}`}
                   </div>
-                </div>
-                <div className="text-right">
-                   <div className="text-[10px] font-black uppercase text-forest/60">Includes Fees</div>
-                   <div className="text-xs font-bold text-forest">No Annual Tax</div>
+                  {paymentMethod === "onchain" && (
+                    <div className="text-[10px] font-bold text-forest/50">
+                      {feeLoading ? "Fetching registrar fee..." : "Fee from on-chain registrar"}
+                    </div>
+                  )}
+                  {paymentMethod === "onchain" && selectedTokenBalance && paymentToken && (
+                    <div className="text-[10px] font-bold text-forest/70">
+                      Balance: {Number(selectedTokenBalance.formatted).toFixed(4)} {paymentToken.symbol}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {paymentMethod === "onchain" && (
-                <div className="flex items-start gap-2 p-3 border-2 border-blue-200 bg-blue-50">
-                  <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                  <p className="text-[10px] font-bold text-blue-700">
-                    <span className="font-black">Fee Abstraction Active:</span> We'll automatically use {paymentToken.symbol} for registration and CELO for gas if available.
-                  </p>
-                </div>
-              )}
-
-              {paymentMethod === "x402" && (
-                <div className="flex items-start gap-2 p-3 border-2 border-celo-yellow/30 bg-celo-yellow/5">
-                  <Bot className="w-4 h-4 text-celo-yellow-dark shrink-0 mt-0.5" />
-                  <p className="text-[10px] font-bold text-forest/70">
-                    <span className="font-black">Gasless Flow:</span> Sign one authorization. No gas fees or CELO required.
+              {paymentMethod === "onchain" && txError && (
+                <div className="flex items-start gap-2 p-3 border-2 border-red-300 bg-red-50">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <p className="text-[10px] font-bold text-red-800">
+                    <span className="font-black">Transaction error:</span> {txError}
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="pt-4">
+            <div className="pt-2">
+              {paymentMethod === "onchain" && paymentToken && selectedTokenBalance && Number(selectedTokenBalance.formatted) < numericUiPrice && (
+                <div className="mb-3 p-2 bg-red-50 border-2 border-red-200 text-[10px] font-black uppercase text-red-500 text-center animate-pulse">
+                  Insufficient {paymentToken.symbol} Balance
+                </div>
+              )}
               <Button
                 onClick={handleBuy}
-                disabled={!subdomain || subdomain.length < 3 || registering || !selectedAgentId}
-                className="w-full h-16 text-xl font-black uppercase tracking-widest bg-forest hover:bg-forest/90 text-white rounded-none border-t-2 border-white/20 shadow-hard transition-all active:translate-y-1 active:shadow-none"
+                disabled={
+                  !subdomain ||
+                  subdomain.length < 3 ||
+                  subdomain.length > 20 ||
+                  registering ||
+                  !selectedAgentId ||
+                  (paymentMethod === "onchain" && (!paymentToken || supportedTokens.length === 0)) ||
+                  (paymentMethod === "onchain" && !!paymentToken && !!selectedTokenBalance && Number(selectedTokenBalance.formatted) < numericUiPrice)
+                }
+                className="w-full h-16 text-xl font-black uppercase tracking-widest"
               >
                 {registering ? (
                   <>
@@ -684,28 +1097,8 @@ export default function EnsBuyPage() {
                 )}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Benefits */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 border-2 border-forest bg-white">
-            <h4 className="font-black uppercase text-sm mb-1 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-forest" /> On-Chain Identity
-            </h4>
-            <p className="text-xs font-bold text-forest/60">
-              Resolves to your agent's wallet everywhere ENS is supported.
-            </p>
           </div>
-          <div className="p-4 border-2 border-forest bg-white">
-            <h4 className="font-black uppercase text-sm mb-1 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-forest" /> Human Readable
-            </h4>
-            <p className="text-xs font-bold text-forest/60">
-              Replace long hex addresses with simple names.
-            </p>
-          </div>
-        </div>
+        </Modal>
       </div>
     </div>
   );

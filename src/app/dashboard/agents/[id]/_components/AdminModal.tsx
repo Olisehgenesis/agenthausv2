@@ -71,7 +71,7 @@ export function AdminModal({
     
     setRegisteringEns(true);
     try {
-      const confirmMsg = `To register ${subdomain}.agenthaus.space, please send 2 CELO to the treasury address. Do you want to proceed?`;
+      const confirmMsg = `To register ${subdomain}.agenthaus.eth, submit the registrar transaction first, then provide the tx hash here. Continue?`;
       if (!window.confirm(confirmMsg)) {
         setRegisteringEns(false);
         return;
@@ -89,13 +89,14 @@ export function AdminModal({
         body: JSON.stringify({
           agentId: agent.id,
           subdomain: subdomain,
-          txHash: hash
+          txHash: hash,
+          ownerAddress: agent.owner.walletAddress,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Registered ${subdomain}.agenthaus.space!`);
+        toast.success(`Registered ${subdomain}.agenthaus.eth!`);
         agent.ensSubdomain = subdomain;
         onSocialsUpdated?.(); // Trigger refresh
       } else {
@@ -306,7 +307,7 @@ export function AdminModal({
           {agent.ensSubdomain ? (
             <div className="flex items-center justify-between p-2 rounded-lg bg-forest/10 border border-forest/20">
               <span className="text-sm font-mono text-forest">
-                {agent.ensSubdomain}.agenthaus.space
+                {agent.ensSubdomain}.agenthaus.eth
               </span>
               <CheckCircle className="w-4 h-4 text-forest" />
             </div>
@@ -319,10 +320,10 @@ export function AdminModal({
                   onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                   className="h-9 text-xs bg-white border-forest/10"
                 />
-                <span className="text-xs text-forest-muted">.agenthaus.space</span>
+                <span className="text-xs text-forest-muted">.agenthaus.eth</span>
               </div>
               <p className="text-[10px] text-forest-muted">
-                Fee: <span className="text-forest font-bold">2 CELO</span> (~$0.50 USDT)
+                Fee is token-specific in registrar (USDT/USDC/cUSD)
               </p>
               <Button
                 size="sm"

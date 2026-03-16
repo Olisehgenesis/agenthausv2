@@ -9,6 +9,7 @@ import { getHausNamePrice } from "@/lib/pricing";
 const PLATFORM_PAYMENT_WALLET = "0x9b6A52A88a1Ee029Bd14170fFb8fB15839Bd18cB";
 const ROOT_DOMAIN = "agenthaus.eth";
 const NETWORK = "celo"; // or eip155:42220
+const SUBDOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,18}[a-z0-9])?$/;
 
 export const dynamic = "force-dynamic";
 
@@ -89,31 +90,74 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Payment settlement failed: " + settlement.error }, { status: 500 });
     }
 
-    // 4. Business Logic: Check if name is taken
-    const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (cleanName.length < 3) {
-      return NextResponse.json({ error: "Name too short" }, { status: 400 });
+    // 4. Business Logic: normalize and validate name exactly like on-chain flow
+    const cleanName = name.toLowerCase().trim();
+    if (!SUBDOMAIN_PATTERN.test(cleanName)) {
+      return NextResponse.json({ error: "Invalid name format" }, { status: 400 });
     }
 
-    const existingName = await prisma.agent.findUnique({
-      where: { ensSubdomain: cleanName }
+    const existingName = await prisma.ensSubdomain.findUnique({
+      where: { name: cleanName },
+      select: { agentId: true },
     });
 
-    if (existingName) {
+    if (existingName && existingName.agentId !== agentId) {
       return NextResponse.json({ error: "Name already registered" }, { status: 409 });
     }
+
+    const agentForOwner = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: {
+        owner: {
+          select: { walletAddress: true },
+        },
+      },
+    });
+
+    const resolvedOwnerAddress = agentForOwner?.owner?.walletAddress?.toLowerCase() || "";
 
     // 5. Update database (The Database is the Resolver)
     const fullName = `${cleanName}.${ROOT_DOMAIN}`;
     const node = namehash(fullName);
 
-    const updatedAgent = await prisma.agent.update({
-      where: { id: agentId },
-      data: {
-        ensSubdomain: cleanName,
-        ensNode: node,
-        ensRegisteredAt: new Date(),
-      }
+    const updatedAgent = await prisma.$transaction(async (tx) => {
+      // Re-tag flow: keep one ENS row per agent.
+      await tx.ensSubdomain.deleteMany({
+        where: {
+          agentId,
+          name: { not: cleanName },
+        },
+      });
+
+      const agent = await tx.agent.update({
+        where: { id: agentId },
+        data: {
+          ensSubdomain: cleanName,
+          ensNode: node,
+          ensRegisteredAt: new Date(),
+        },
+      });
+
+      await tx.ensSubdomain.upsert({
+        where: { name: cleanName },
+        update: {
+          ownerAddress: resolvedOwnerAddress,
+          txHash: settlement.transactionHash,
+          agentId,
+          node,
+          fullName,
+        },
+        create: {
+          name: cleanName,
+          fullName,
+          node,
+          ownerAddress: resolvedOwnerAddress,
+          txHash: settlement.transactionHash,
+          agentId,
+        },
+      });
+
+      return agent;
     });
 
     return NextResponse.json({

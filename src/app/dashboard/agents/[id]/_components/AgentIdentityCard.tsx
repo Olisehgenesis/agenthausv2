@@ -52,7 +52,7 @@ export function AgentIdentityCard({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-mono text-blue-300">
-                {agent.ensSubdomain}.agenthaus.space
+                {agent.ensSubdomain}.agenthaus.eth
               </span>
               <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/20">
                 <span className="text-[10px] text-blue-400 uppercase font-bold">ENS</span>
