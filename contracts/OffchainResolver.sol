@@ -31,22 +31,50 @@ contract OffchainResolver is IExtendedResolver {
         owner = msg.sender;
     }
 
+    function _offchainLookup(bytes memory callData) internal view {
+        string[] memory urls = new string[](1);
+        urls[0] = url;
+
+        revert OffchainLookup(
+            address(this),
+            urls,
+            callData,
+            OffchainResolver.resolveWithProof.selector,
+            callData
+        );
+    }
+
     /**
      * @dev Resolves a name off-chain.
      * @param name The DNS-encoded name to resolve.
      * @param data The ABI-encoded function call (e.g., addr(bytes32)).
      */
     function resolve(bytes calldata name, bytes calldata data) external view override returns (bytes memory) {
-        string[] memory urls = new string[](1);
-        urls[0] = url;
-        
-        revert OffchainLookup(
-            address(this),
-            urls,
-            data,
-            OffchainResolver.resolveWithProof.selector,
-            data
-        );
+        _offchainLookup(data);
+    }
+
+    /**
+     * @dev ENS AddressResolver compatibility via CCIP-Read.
+     */
+    function addr(bytes32 node) external view returns (address) {
+        _offchainLookup(abi.encodeWithSelector(this.addr.selector, node));
+        return address(0);
+    }
+
+    /**
+     * @dev ENS TextResolver compatibility via CCIP-Read.
+     */
+    function text(bytes32 node, string calldata key) external view returns (string memory) {
+        _offchainLookup(abi.encodeWithSelector(this.text.selector, node, key));
+        return "";
+    }
+
+    /**
+     * @dev ENS ContentHashResolver compatibility via CCIP-Read.
+     */
+    function contenthash(bytes32 node) external view returns (bytes memory) {
+        _offchainLookup(abi.encodeWithSelector(this.contenthash.selector, node));
+        return "";
     }
 
     /**
@@ -57,7 +85,13 @@ contract OffchainResolver is IExtendedResolver {
     }
 
     function supportsInterface(bytes4 interfaceID) external pure returns (bool) {
-        return interfaceID == 0x9061b923 || interfaceID == 0x01ffc9a7;
+        return (
+            interfaceID == 0x01ffc9a7 || // ERC165
+            interfaceID == 0x9061b923 || // IExtendedResolver (resolve(bytes,bytes))
+            interfaceID == 0x3b3b57de || // AddressResolver (addr(bytes32))
+            interfaceID == 0x59d1d43c || // TextResolver (text(bytes32,string))
+            interfaceID == 0xbc1c58d1    // ContentHashResolver (contenthash(bytes32))
+        );
     }
 
     function setUrl(string memory _url) external {

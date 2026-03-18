@@ -7,6 +7,13 @@ import { decodeEventLog, isAddress, parseAbiItem, type Hash } from "viem";
 const REGISTRAR_ADDRESS = "0xcf5D3d90DB4129D1063d8ad0942B375691ef6a2a";
 const ENS_ROOT = "agenthaus.eth";
 const SUBDOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,18}[a-z0-9])?$/;
+const ENS_SUFFIX = ".agenthaus.eth";
+
+function normalizeInputName(raw: string): string {
+  const value = raw.toLowerCase().trim();
+  if (!value) return "";
+  return value.endsWith(ENS_SUFFIX) ? value.slice(0, -ENS_SUFFIX.length) : value;
+}
 
 const SUBDOMAIN_REGISTERED_EVENT = parseAbiItem(
   "event SubdomainRegistered(string name, address indexed owner, address indexed token, uint256 fee, address indexed registrant)"
@@ -37,7 +44,7 @@ export async function POST(req: NextRequest) {
     const normalizedOwnerAddress = ownerAddress.toLowerCase();
 
     // 1. Validate subdomain format
-    const cleanSubdomain = subdomain.toLowerCase().trim();
+    const cleanSubdomain = normalizeInputName(subdomain);
     if (!SUBDOMAIN_PATTERN.test(cleanSubdomain)) {
       return NextResponse.json({ message: "Invalid subdomain format." }, { status: 400 });
     }

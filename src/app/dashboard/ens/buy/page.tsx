@@ -45,6 +45,28 @@ const registrarAbi = [
   },
 ] as const;
 
+const registrarRecordAbi = [
+  {
+    name: "getNameRecord",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "name", type: "string" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "owner", type: "address" },
+          { name: "token", type: "address" },
+          { name: "paidAmount", type: "uint256" },
+          { name: "registeredAt", type: "uint64" },
+          { name: "active", type: "bool" },
+        ],
+      },
+    ],
+  },
+] as const;
+
 const erc20Abi = [
   {
     name: "symbol",
@@ -422,6 +444,60 @@ export default function EnsBuyPage() {
       const selectedAgent = agents.find((a) => a.id === selectedAgentId);
       if (!selectedAgent) throw new Error("Agent not found");
 
+      const tryReconcileRegistration = async () => {
+        const reconcileRes = await fetch("/api/ens/register-reconcile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agentId: selectedAgent.id,
+            subdomain,
+            ownerAddress: address,
+          }),
+        });
+
+        if (!reconcileRes.ok) {
+          return false;
+        }
+
+        toast.success(`Registered ${subdomain}.agenthaus.eth!`);
+        router.push(`/dashboard/agents/${selectedAgent.id}`);
+        return true;
+      };
+
+      const runOnchainPreflight = async () => {
+        if (paymentMethod !== "onchain") return false;
+
+        const chainRecord = (await publicClient.readContract({
+          address: REGISTRAR_ADDRESS as Address,
+          abi: registrarRecordAbi,
+          functionName: "getNameRecord",
+          args: [subdomain.toLowerCase().trim()],
+        })) as {
+          owner: Address;
+          token: Address;
+          paidAmount: bigint;
+          registeredAt: bigint;
+          active: boolean;
+        };
+
+        const recordOwner = chainRecord.owner;
+        const active = chainRecord.active;
+
+        if (!active) return false;
+
+        const selectedAgentWallet = String(selectedAgent.agentWalletAddress || "").toLowerCase();
+        if (recordOwner.toLowerCase() === selectedAgentWallet) {
+          toast.info("Name already active on-chain for this agent. Syncing now...");
+          const recovered = await tryReconcileRegistration();
+          if (recovered) {
+            return true;
+          }
+          throw new Error("Name is already active on-chain for this agent, but sync failed.");
+        }
+
+        throw new Error("Name is already registered on-chain by another owner.");
+      };
+
       if (paymentMethod === "x402") {
         // x402 Gasless Flow
         const { X402Client } = await import("uvd-x402-sdk");
@@ -455,6 +531,11 @@ export default function EnsBuyPage() {
       } else {
         if (!isOnchainCeloSupported) {
           throw new Error("On-chain ENS payment is supported on Celo Mainnet only.");
+        }
+
+        const alreadyHandled = await runOnchainPreflight();
+        if (alreadyHandled) {
+          return;
         }
 
         if (!paymentToken) {
@@ -521,7 +602,11 @@ export default function EnsBuyPage() {
         const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as Hash });
 
         if (receipt.status !== "success") {
-          throw new Error("Registration transaction failed");
+          const recovered = await tryReconcileRegistration();
+          if (recovered) {
+            return;
+          }
+          throw new Error("Registration transaction failed on-chain");
         }
 
         const payload = {
@@ -551,6 +636,11 @@ export default function EnsBuyPage() {
           toast.success(`Registered ${subdomain}.agenthaus.eth!`);
           router.push(`/dashboard/agents/${selectedAgent.id}`);
         } else {
+          const recovered = await tryReconcileRegistration();
+          if (recovered) {
+            return;
+          }
+
           const error = await res.json();
           toast.error(error.message || `Payment confirmed on-chain (tx: ${hash.slice(0, 10)}...), but backend sync failed. Please retry.`);
         }
@@ -919,6 +1009,12 @@ export default function EnsBuyPage() {
                 <Download className="w-4 h-4 mr-2" />
                 Import Agent
               </Button>
+              <Link href="/dashboard/ens/debug" className="inline-flex">
+                <Button variant="outline" className="border-2 border-forest">
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  Debug
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
