@@ -188,6 +188,18 @@ export function generateRegistrationJSON(params: GenerateRegistrationJSONParams)
     ...(contactEmail ? [{ name: "email" as const, endpoint: contactEmail }] : []),
     { name: "deployedBy" as const, endpoint: DEPLOYMENT_URL },
     { name: "agenthaus-chat", endpoint: serviceUrl, version: "1.0" },
+    { 
+      name: "mcp" as const, 
+      endpoint: `${baseUrl}/api/mcp/${agentId}`,
+      version: "1.0.0",
+      description: "Model Context Protocol server for agent interaction"
+    },
+    { 
+      name: "a2a" as const, 
+      endpoint: `${baseUrl}/api/a2a/${agentId}/agent.json`,
+      version: "1.0",
+      description: "Agent-to-Agent protocol agent card"
+    },
     ...(agentWalletAddress
       ? [{ name: "agentWallet" as const, endpoint: `eip155:${chainId}:${agentWalletAddress}` }]
       : []),
