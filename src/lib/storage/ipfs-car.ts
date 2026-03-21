@@ -1,6 +1,6 @@
 import { createFileEncoderStream, createDirectoryEncoderStream, CAREncoderStream } from "ipfs-car";
 import { CarReader } from "@ipld/car";
-import { recursive } from "ipfs-unixfs-exporter";
+import { recursive, exporter } from "ipfs-unixfs-exporter";
 import { uploadToStoracha, getIPFSUrl as getStorachaUrl, getAllGateways as getStorachaGateways } from "./storacha";
 
 export interface CarPackResult {
@@ -98,17 +98,19 @@ export async function extractCar(carBlob: Blob): Promise<{ roots: string[]; file
     };
 
     for await (const entry of recursive(root, blockstore as any)) {
-      if (entry.type !== "file") continue;
+      const node = await exporter(entry.cid, blockstore as any);
+      if (node.type !== "file") continue;
+
       const chunks: Uint8Array[] = [];
-      for await (const chunk of entry.content()) {
+      for await (const chunk of node.content()) {
         chunks.push(chunk);
       }
       const buffer = appendChunksToUint8Array(chunks);
       const text = new TextDecoder().decode(buffer);
 
       files.push({
-        path: entry.path || "",
-        type: entry.type,
+        path: entry.path || node.path || "",
+        type: node.type,
         size: buffer.length,
         content: text,
       });
