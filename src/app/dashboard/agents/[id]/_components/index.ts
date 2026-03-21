@@ -12,4 +12,5 @@ export { TokenTradeTab } from "./TokenTradeTab";
 export { VerifyModal } from "./VerifyModal";
 export { IdentityModal } from "./IdentityModal";
 export { StableSelfQR, SessionCountdown } from "./SelfQR";
+export { SessionModal } from "./SessionModal";
 

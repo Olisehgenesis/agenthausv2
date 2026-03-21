@@ -1,14 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Wallet, RefreshCw, Copy, ExternalLink, Send,
-  Loader2, AlertCircle, CheckCircle, Info,
+  Loader2, AlertCircle, CheckCircle, Info, ShieldCheck,
 } from "lucide-react";
 import { formatAddress } from "@/lib/utils";
 import { getBlockExplorer } from "@/lib/constants";
+import { SessionModal } from "./SessionModal";
 import type { AgentData, WalletBalanceData, SendResult } from "../_types";
 
 interface WalletCardProps {
@@ -61,6 +62,23 @@ export function WalletCard({
   const hasDedicatedWallet = agent.agentWalletAddress && agent.walletDerivationIndex != null;
   const chainId = agentChainId ?? agent.erc8004ChainId ?? connectedChainId ?? 42220;
   const explorer = getBlockExplorer(chainId);
+  const ownerAddress = agent.owner?.walletAddress ?? "";
+  const isSessionActive =
+    agent.walletType === "metamask_session" &&
+    agent.sessionKeyAddress != null &&
+    agent.sessionContext != null &&
+    agent.sessionExpiresAt != null &&
+    new Date(agent.sessionExpiresAt) > new Date();
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
+  const existingSession = agent.sessionKeyAddress
+    ? {
+        active: isSessionActive,
+        sessionKeyAddress: agent.sessionKeyAddress,
+        expiresAt: agent.sessionExpiresAt ?? null,
+        permissions: agent.sessionPermissions ? JSON.parse(agent.sessionPermissions) : null,
+      }
+    : null;
 
   if (!agent.agentWalletAddress) {
     return (
@@ -331,7 +349,42 @@ export function WalletCard({
             </div>
           </div>
         )}
+
+        {agent.walletType !== "owner" && (
+          <div className="px-6 pb-4">
+            <button
+              onClick={() => setShowSessionModal(true)}
+              className="w-full flex items-center gap-2 px-4 py-3 border-2 border-forest/20 rounded-lg hover:border-forest hover:bg-forest/5 transition-colors text-xs font-black uppercase"
+            >
+              {isSessionActive ? (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-green-600" />
+                  Session Active — Manage
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  Set Up ERC-7715 Session
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </CardContent>
+
+      <SessionModal
+        open={showSessionModal}
+        onClose={() => {
+          setShowSessionModal(false);
+          setSessionRefreshKey((k) => k + 1);
+        }}
+        agentId={agent.id}
+        agentName={agent.name}
+        ownerAddress={ownerAddress}
+        chainId={chainId}
+        existingSession={existingSession}
+        onRevokeSuccess={() => setSessionRefreshKey((k) => k + 1)}
+      />
     </Card>
   );
 }

@@ -1,13 +1,62 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { encryptPrivateKey } from "@/lib/selfclaw/keys";
+import { encryptPrivateKey, generateKeyPair, signMessage, spkiToRawHex } from "@/lib/selfclaw/keys";
 
-const SELF_AGENT_API_BASE =
-  process.env.SELF_AGENT_API_BASE || "https://self-agent-id.vercel.app";
+const DEFAULT_SELF_AGENT_API_BASE = "https://self-agent-id.vercel.app";
+
+function resolveSelfAgentApiBase(raw: string | undefined): string {
+  if (!raw) return DEFAULT_SELF_AGENT_API_BASE;
+
+  // Be tolerant of malformed env lines where another key is accidentally
+  // concatenated onto the URL (e.g. "...vercel.appSCAN_...").
+  const match = raw.match(/https?:\/\/[^\s]+/i);
+  if (!match) return DEFAULT_SELF_AGENT_API_BASE;
+
+  let candidate = match[0].trim();
+  const leakIdx = candidate.indexOf("SCAN_");
+  if (leakIdx > 0) {
+    candidate = candidate.slice(0, leakIdx);
+  }
+  candidate = candidate.replace(/\/+$/, "");
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return DEFAULT_SELF_AGENT_API_BASE;
+    }
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return DEFAULT_SELF_AGENT_API_BASE;
+  }
+}
+
+const SELF_AGENT_API_BASE = resolveSelfAgentApiBase(process.env.SELF_AGENT_API_BASE);
 const DEFAULT_NETWORK =
   process.env.SELF_NETWORK === "testnet" ? "testnet" : "mainnet";
-const DEFAULT_MODE =
-  process.env.SELF_AGENT_MODE || "agent-identity";
+
+function resolveSelfAgentMode(raw: string | undefined): string {
+  // Current upstream valid modes:
+  // linked, wallet-free, ed25519, ed25519-linked, privy, smartwallet
+  const mode = (raw || "").trim().toLowerCase();
+  if (!mode) return "ed25519-linked";
+
+  // Backward compatibility for old local env values.
+  if (mode === "agent-identity") return "ed25519-linked";
+  if (mode === "agent_identity") return "ed25519-linked";
+  if (mode === "walletfree") return "wallet-free";
+
+  const allowed = new Set([
+    "linked",
+    "wallet-free",
+    "ed25519",
+    "ed25519-linked",
+    "privy",
+    "smartwallet",
+  ]);
+  return allowed.has(mode) ? mode : "ed25519-linked";
+}
+
+const DEFAULT_MODE = resolveSelfAgentMode(process.env.SELF_AGENT_MODE);
 
 type SelfStartResponse = {
   sessionId: string;
@@ -62,9 +111,15 @@ async function parseJson(res: Response, label: string): Promise<Record<string, u
   }
 }
 
-async function startSelfRegistration(agentName: string, humanAddress?: string): Promise<SelfStartResponse> {
+async function startSelfRegistration(
+  agentName: string,
+  mode: string,
+  ed25519Pubkey?: string,
+  ed25519Signature?: string,
+  humanAddress?: string
+): Promise<SelfStartResponse> {
   const payload: Record<string, unknown> = {
-    mode: DEFAULT_MODE,
+    mode,
     network: DEFAULT_NETWORK,
     disclosures: {
       minimumAge: 18,
@@ -72,6 +127,8 @@ async function startSelfRegistration(agentName: string, humanAddress?: string): 
     },
     agentName,
   };
+  if (ed25519Pubkey) payload.ed25519Pubkey = ed25519Pubkey;
+  if (ed25519Signature) payload.ed25519Signature = ed25519Signature;
   if (humanAddress) payload.humanAddress = humanAddress;
 
   const res = await fetch(`${SELF_AGENT_API_BASE}/api/agent/register`, {
@@ -239,6 +296,8 @@ export async function POST(
       typeof body?.connectedWalletAddress === "string"
         ? body.connectedWalletAddress.trim()
         : undefined;
+    const requestedMode =
+      typeof body?.mode === "string" ? body.mode.trim() : undefined;
     const agentWalletAddressFromClient =
       typeof body?.agentWalletAddress === "string"
         ? body.agentWalletAddress.trim()
@@ -260,13 +319,23 @@ export async function POST(
 
     switch (action) {
       case "start":
-        return handleStart(agent, connectedWalletAddress, agentWalletAddressFromClient);
+        return handleStart(
+          agent,
+          connectedWalletAddress,
+          agentWalletAddressFromClient,
+          requestedMode
+        );
       case "sign":
         return handleSign(agent.id);
       case "check":
         return handleCheck(agent.id);
       case "restart":
-        return handleRestart(agent, connectedWalletAddress, agentWalletAddressFromClient);
+        return handleRestart(
+          agent,
+          connectedWalletAddress,
+          agentWalletAddressFromClient,
+          requestedMode
+        );
       case "sync":
         return handleSync(agent.id);
       default:
@@ -292,7 +361,8 @@ async function handleStart(
     owner: { walletAddress: string };
   },
   connectedWalletAddress?: string,
-  agentWalletAddressFromClient?: string
+  agentWalletAddressFromClient?: string,
+  requestedMode?: string
 ) {
   const existing = await prisma.agentVerification.findUnique({ where: { agentId: agent.id } });
 
@@ -307,17 +377,62 @@ async function handleStart(
 
   try {
     const isEvmAddress = (value?: string | null) => !!value && /^0x[a-fA-F0-9]{40}$/.test(value);
-    const humanAddress = isEvmAddress(agentWalletAddressFromClient)
-      ? agentWalletAddressFromClient
-      : isEvmAddress(agent.agentWalletAddress)
-        ? agent.agentWalletAddress!
+    const humanAddress = isEvmAddress(agent.agentWalletAddress)
+      ? agent.agentWalletAddress!
+      : isEvmAddress(agentWalletAddressFromClient)
+        ? agentWalletAddressFromClient
         : isEvmAddress(connectedWalletAddress)
           ? connectedWalletAddress
           : isEvmAddress(agent.owner.walletAddress)
             ? agent.owner.walletAddress
             : undefined;
 
-    const start = await startSelfRegistration(agent.name, humanAddress);
+    const requested = resolveSelfAgentMode(requestedMode);
+    const isRequestedExplicit = !!requestedMode?.trim();
+
+    // Temporary policy: use linked mode for stability.
+    // If explicitly requested, allow that mode; otherwise default to linked.
+    const modeCandidates = isRequestedExplicit ? [requested] : ["linked"];
+
+    let start: SelfStartResponse | null = null;
+    let mode = modeCandidates[0];
+    let generated: { publicKey: string; privateKeyHex: string } | null = null;
+    let lastError: unknown = null;
+
+    for (const candidate of modeCandidates) {
+      mode = candidate;
+      try {
+        const requiresEd25519 = candidate === "ed25519" || candidate === "ed25519-linked";
+        generated = requiresEd25519 ? await generateKeyPair() : null;
+        const ed25519Pubkey = generated ? spkiToRawHex(generated.publicKey) : undefined;
+
+        // Upstream now expects a 64-byte hex signature for ed25519 modes.
+        // Sign a deterministic payload tied to this request; if upstream expects
+        // a different canonical payload it will fail and we fall back to linked.
+        const ed25519Signature =
+          generated && humanAddress
+            ? await signMessage(`link:${humanAddress.toLowerCase()}:${agent.name}`, generated.privateKeyHex)
+            : undefined;
+
+        start = await startSelfRegistration(
+          agent.name,
+          candidate,
+          ed25519Pubkey,
+          ed25519Signature,
+          humanAddress
+        );
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (!start) {
+      throw (lastError instanceof Error
+        ? lastError
+        : new Error("Failed to start verification with available modes"));
+    }
+
     const expiresAtMs = start.expiresAt ? Date.parse(start.expiresAt) : null;
 
     const selfAppConfig = {
@@ -332,8 +447,8 @@ async function handleStart(
       where: { agentId: agent.id },
       create: {
         agentId: agent.id,
-        publicKey: start.agentAddress || `self-agent:${agent.id}`,
-        encryptedPrivateKey: encryptPrivateKey(start.privateKeyHex || "0x00"),
+        publicKey: generated?.publicKey || start.agentAddress || `self-agent:${agent.id}`,
+        encryptedPrivateKey: encryptPrivateKey(generated?.privateKeyHex || start.privateKeyHex || "0".repeat(64)),
         status: "pending",
         sessionId: start.sessionId,
         challenge: JSON.stringify({
@@ -345,10 +460,12 @@ async function handleStart(
         selfxyzVerified: false,
       },
       update: {
-        publicKey: start.agentAddress || existing?.publicKey || `self-agent:${agent.id}`,
-        encryptedPrivateKey: start.privateKeyHex
-          ? encryptPrivateKey(start.privateKeyHex)
-          : existing?.encryptedPrivateKey || encryptPrivateKey("0x00"),
+        publicKey: generated?.publicKey || start.agentAddress || existing?.publicKey || `self-agent:${agent.id}`,
+        encryptedPrivateKey: generated?.privateKeyHex
+          ? encryptPrivateKey(generated.privateKeyHex)
+          : start.privateKeyHex
+            ? encryptPrivateKey(start.privateKeyHex)
+            : existing?.encryptedPrivateKey || encryptPrivateKey("0".repeat(64)),
         status: "pending",
         sessionId: start.sessionId,
         challenge: JSON.stringify({
@@ -371,6 +488,7 @@ async function handleStart(
       selfAppConfig,
       challengeExpiresAt: expiresAtMs,
       message: "Verification started. Next step: call with action 'sign'.",
+      modeUsed: mode,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to start verification";
@@ -516,10 +634,16 @@ async function handleRestart(
     owner: { walletAddress: string };
   },
   connectedWalletAddress?: string,
-  agentWalletAddressFromClient?: string
+  agentWalletAddressFromClient?: string,
+  requestedMode?: string
 ) {
   await prisma.agentVerification.deleteMany({ where: { agentId: agent.id } });
-  return handleStart(agent, connectedWalletAddress, agentWalletAddressFromClient);
+  return handleStart(
+    agent,
+    connectedWalletAddress,
+    agentWalletAddressFromClient,
+    requestedMode
+  );
 }
 
 async function handleSync(agentId: string) {

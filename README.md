@@ -104,24 +104,7 @@ Open the agent's chat tab. Ask it to send payments, execute swaps, check prices,
 
 ---
 
-## Prize Tracks (The Synthesis Hackathon)
 
-| Prize | Amount | Status |
-|-------|--------|--------|
-| [Best Agent on Celo](https://synthesis.devfolio.co/catalog/prizes.md?track=celo) | $3K / $2K | ✅ 11 agents live |
-| [Best Self Protocol Integration](https://synthesis.devfolio.co/catalog/prizes.md?track=self) | $1K | ✅ SelfClaw ZK verification |
-| [ENS Identity](https://synthesis.devfolio.co/catalog/prizes.md?track=ens) | $600 / $400 | ✅ Subdomains live |
-| [ERC-8004 Agents With Receipts](https://synthesis.devfolio.co/catalog/prizes.md?track=protocol%20labs) | $2K / $1.5K | ✅ ERC-8004 registered |
-| [Agentic Storage (Filecoin)](https://synthesis.devfolio.co/catalog/prizes.md?track=filecoin) | $1K / $700 | ✅ Storacha + IPFS |
-| [Let the Agent Cook](https://synthesis.devfolio.co/catalog/prizes.md?track=protocol%20labs) | $2K / $1.5K | ⚡ Automation in progress |
-| [Best Use of Delegations](https://synthesis.devfolio.co/catalog/prizes.md?track=metamask) | $3K / $1.5K / $500 | ⚡ ERC-7715 planned |
-| [Agentic Finance](https://synthesis.devfolio.co/catalog/prizes.md?track=uniswap) | $2.5K / $1.5K / $1K | ✅ Mento, Uniswap planned |
-| [Build an Agent for Pearl](https://synthesis.devfolio.co/catalog/prizes.md?track=olas) | $1K | ⚡ Planned |
-| [ERC-8183 Open Build](https://synthesis.devfolio.co/catalog/prizes.md?track=virtuals) | $2K | ⚡ Planned |
-
-**Stack multiple bounties:** One build qualifies for Celo + Self + ENS + Filecoin + ERC-8004 tracks simultaneously.
-
----
 
 ## Tech Stack
 
@@ -134,13 +117,13 @@ Open the agent's chat tab. Ask it to send payments, execute swaps, check prices,
 | **Wallet Connection** | Reown AppKit (MetaMask, WalletConnect) | ✅ |
 | **Agent Wallets** | HD derivation (m/44'/60'/0'/0/n) | ✅ |
 | **Spending Limits** | USD-denominated, enforced server-side | ✅ |
-| **Permissions** | ERC-7715 (MetaMask Delegation Toolkit) | ⚡ Soon |
-| **Session Keys** | Owner approves once via MetaMask, agent operates autonomously | ⚡ Soon |
+| **Permissions** | ERC-7715 (MetaMask Delegation Toolkit) | ✅ |
+| **Session Keys** | Owner approves once via MetaMask, agent operates autonomously | ✅ |
 | **Storage** | Filecoin (Storacha) + Pinata IPFS | ✅ |
 | **Messaging** | Telegram, Discord, Web | ✅ |
 | **Agent Discovery** | MCP + A2A protocols | ✅ |
 | **Domains** | ENS (agenthaus.space subdomains) | ✅ |
-| **Payments** | x402 protocol (partial) | ⚡ |
+| **Payments** | x402 protocol | ✅ |
 
 ---
 
@@ -151,7 +134,7 @@ Choose how your agent handles wallets at creation:
 | Option | How It Works | Best For |
 |--------|-------------|----------|
 | **Dedicated Vault** | Agent gets its own HD wallet, key encrypted in DB | Autonomous agents that operate 24/7 |
-| **MetaMask Session** *(coming soon)* | No keys in DB. Owner approves once via MetaMask popup (ERC-7715). Agent uses a session key to operate autonomously. Revocable anytime. | Agents where owner wants control but minimal approval friction |
+| **MetaMask Session** | No keys in DB. Owner approves once via MetaMask popup (ERC-7715). Agent uses a session key to operate autonomously. Revocable anytime. | Agents where owner wants control but minimal approval friction |
 | **Owner Proxy** | Agent uses owner's address. All sends require owner approval in MetaMask. | Read-only agents, agents needing manual sign-off |
 | **Deferred** | Deploy without wallet, bind later via dashboard | Staging or multi-phase deployments |
 

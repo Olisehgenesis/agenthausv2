@@ -3,10 +3,10 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { AlertCircle, Check, Wallet, User, Clock, MessageSquare, Info } from "lucide-react";
+import { AlertCircle, Check, Wallet, User, Clock, MessageSquare, Info, ShieldCheck } from "lucide-react";
 import { DEPLOYMENT_ATTRIBUTION } from "@/lib/constants";
 
-export type WalletOption = "dedicated" | "owner" | "later";
+export type WalletOption = "dedicated" | "owner" | "later" | "metamask_session";
 
 interface SecurityStepProps {
   spendingLimit: number;
@@ -29,6 +29,7 @@ export function SecurityStep({ spendingLimit, setSpendingLimit, walletOption, se
             onChange={(e) => setWalletOption(e.target.value as WalletOption)}
             options={[
               { value: "dedicated", label: "Dedicated vault (recommended)" },
+              { value: "metamask_session", label: "MetaMask session (ERC-7715, no keys in DB)" },
               { value: "owner", label: "Use my address (read‑only)" },
               { value: "later", label: "Set up later" },
             ]}
@@ -72,6 +73,15 @@ export function SecurityStep({ spendingLimit, setSpendingLimit, walletOption, se
                   icon: <Wallet className="w-6 h-6" />,
                   title: "DEDICATED NODE VAULT",
                   desc: "Derive unique HD wallet. Recommended for production.",
+                  badge: "RECOMMENDED",
+                },
+                {
+                  id: "metamask_session" as const,
+                  icon: <ShieldCheck className="w-6 h-6" />,
+                  title: "METAMASK SESSION (ERC-7715)",
+                  desc: "No keys in DB. Owner approves once, agent operates autonomously. Revocable anytime.",
+                  badge: "SOON",
+                  badgeColor: "bg-blue-600",
                 },
                 {
                   id: "owner" as const,
@@ -99,7 +109,14 @@ export function SecurityStep({ spendingLimit, setSpendingLimit, walletOption, se
                       {opt.icon}
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-black uppercase tracking-tight leading-none">{opt.title}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-black uppercase tracking-tight leading-none">{opt.title}</div>
+                        {opt.badge && (
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 text-white ${opt.badgeColor || "bg-forest"}`}>
+                            {opt.badge}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] font-bold text-forest/50 uppercase mt-2 tracking-widest">{opt.desc}</div>
                     </div>
                     <div className={`w-6 h-6 border-2 border-forest flex items-center justify-center ${walletOption === opt.id ? 'bg-forest' : 'bg-white'}`}>
@@ -153,10 +170,10 @@ export function SecurityStep({ spendingLimit, setSpendingLimit, walletOption, se
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0" />
                   <div>
-                    <h4 className="text-xs font-black uppercase text-amber-900">Protocol Shield</h4>
+                    <h4 className="text-xs font-black uppercase text-amber-900">Spending Shield</h4>
                     <p className="text-[10px] font-bold text-amber-800/70 uppercase leading-normal mt-1">
-                      Limits are hard-coded into the registry contract. Transfers exceeding threshold
-                      require physical validation signature.
+                      Limits are enforced server-side. For on-chain enforcement, use MetaMask Session
+                      (ERC-7715) to lock permissions into the protocol layer.
                     </p>
                   </div>
                 </div>

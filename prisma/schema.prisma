@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = ".prisma/client"
 }
 
 datasource db {
@@ -47,6 +48,14 @@ model Agent {
   // Wallet — derived from master mnemonic via HD path m/44'/60'/0'/0/{index}
   agentWalletAddress    String?
   walletDerivationIndex Int?     // HD derivation index for this agent
+  walletType            String?  // "dedicated" | "owner" | "later" | "metamask_session"
+
+  // ERC-7715 Session Keys (MetaMask Session wallet type)
+  sessionKeyAddress      String?  // Derived session key address
+  sessionKeyPrivateKey   String?  // Encrypted session private key (AES-256-GCM)
+  sessionContext         String?  // ERC-7715 permission context from MetaMask
+  sessionExpiresAt       DateTime? // When the permission expires
+  sessionPermissions     String?  @db.Text // JSON: { token, maxAmount, period, maxTransfers }
   
   // Channel integrations (per-agent, multi-tenant)
   telegramBotToken      String?  // AES-256-GCM encrypted bot token from @BotFather

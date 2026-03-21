@@ -20,16 +20,13 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json().catch(() => ({}));
-        const tokenRaw = typeof body.token === "string" ? body.token.trim() : "";
-        const priceRaw = Number(body.price);
-        const token = tokenRaw ? tokenRaw.toUpperCase() : "";
-        const currentPrice = Number.isFinite(priceRaw) ? priceRaw : null;
+        const { token, price } = body;
         const now = new Date();
 
-        console.log(`[Heartbeat] ${now.toISOString()} - Token: ${tokenRaw} -> ${token}, Price: ${body.price} -> ${currentPrice}`);
+        console.log(`[Heartbeat] ${now.toISOString()} - Token: ${token}, Price: ${price}`);
 
         // 2. Find and process PRICE tasks
-        if (token && currentPrice !== null) {
+        if (token && price) {
             const priceTasks = await prisma.agentTask.findMany({
                 where: {
                     triggerType: "price",
@@ -40,26 +37,11 @@ export async function POST(req: Request) {
             });
 
             for (const task of priceTasks) {
-                try {
-                    if (evaluatePriceCondition(task, currentPrice)) {
-                        await executeTaskAction(task);
-                        await prisma.agentTask.update({
-                            where: { id: task.id },
-                            data: { status: "completed" },
-                        });
-                    }
-                } catch (error) {
-                    console.error(`[Price Task Error] task ${task.id} error:`, error);
-                    await prisma.activityLog.create({
-                        data: {
-                            agentId: task.agentId,
-                            type: "error",
-                            message: `Price task ${task.id} failed: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    });
+                if (evaluatePriceCondition(task, price)) {
+                    await executeTaskAction(task);
                     await prisma.agentTask.update({
                         where: { id: task.id },
-                        data: { status: "failed" },
+                        data: { status: "completed" },
                     });
                 }
             }
@@ -77,26 +59,11 @@ export async function POST(req: Request) {
         });
 
         for (const task of timeTasks) {
-            try {
-                await executeTaskAction(task);
-                await prisma.agentTask.update({
-                    where: { id: task.id },
-                    data: { status: "completed" },
-                });
-            } catch (error) {
-                console.error(`[Time Task Error] task ${task.id} error:`, error);
-                await prisma.activityLog.create({
-                    data: {
-                        agentId: task.agentId,
-                        type: "error",
-                        message: `Time task ${task.id} failed: ${error instanceof Error ? error.message : String(error)}`,
-                    },
-                });
-                await prisma.agentTask.update({
-                    where: { id: task.id },
-                    data: { status: "failed" },
-                });
-            }
+            await executeTaskAction(task);
+            await prisma.agentTask.update({
+                where: { id: task.id },
+                data: { status: "completed" },
+            });
         }
 
         // Recurring tasks (CRON)
@@ -109,26 +76,11 @@ export async function POST(req: Request) {
         });
 
         for (const task of cronTasks) {
-            if (!shouldRunCronNow(task.cronSchedule, task.lastExecutedAt, now)) continue;
-
-            try {
+            if (shouldRunCronNow(task.cronSchedule, task.lastExecutedAt, now)) {
                 await executeTaskAction(task);
                 await prisma.agentTask.update({
                     where: { id: task.id },
                     data: { lastExecutedAt: now },
-                });
-            } catch (error) {
-                console.error(`[Cron Task Error] task ${task.id} error:`, error);
-                await prisma.activityLog.create({
-                    data: {
-                        agentId: task.agentId,
-                        type: "error",
-                        message: `Cron task ${task.id} failed: ${error instanceof Error ? error.message : String(error)}`,
-                    },
-                });
-                await prisma.agentTask.update({
-                    where: { id: task.id },
-                    data: { status: "failed" },
                 });
             }
         }
@@ -153,21 +105,17 @@ export async function POST(req: Request) {
 function evaluatePriceCondition(task: any, currentPrice: number): boolean {
     const { conditionType, targetValue, baselinePrice } = task;
 
-    if (!Number.isFinite(currentPrice)) return false;
-    const target = Number(targetValue);
-    const baseline = Number(baselinePrice);
+    if (conditionType === "price_above" && targetValue && currentPrice >= targetValue) return true;
+    if (conditionType === "price_below" && targetValue && currentPrice <= targetValue) return true;
 
-    if (conditionType === "price_above" && Number.isFinite(target) && currentPrice >= target) return true;
-    if (conditionType === "price_below" && Number.isFinite(target) && currentPrice <= target) return true;
-
-    if (conditionType === "percentage_increase" && Number.isFinite(target) && Number.isFinite(baseline) && baseline !== 0) {
-        const increase = ((currentPrice - baseline) / baseline) * 100;
-        if (increase >= target) return true;
+    if (conditionType === "percentage_increase" && targetValue && baselinePrice) {
+        const increase = ((currentPrice - baselinePrice) / baselinePrice) * 100;
+        if (increase >= targetValue) return true;
     }
 
-    if (conditionType === "percentage_decrease" && Number.isFinite(target) && Number.isFinite(baseline) && baseline !== 0) {
-        const decrease = ((baseline - currentPrice) / baseline) * 100;
-        if (decrease >= target) return true;
+    if (conditionType === "percentage_decrease" && targetValue && baselinePrice) {
+        const decrease = ((baselinePrice - currentPrice) / baselinePrice) * 100;
+        if (decrease >= targetValue) return true;
     }
 
     return false;

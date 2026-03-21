@@ -108,7 +108,8 @@ export async function POST(request: Request) {
     let walletDerivationIndex: number | null = null;
 
     const effectiveWalletOption = walletOption || (source === "import" ? "later" : "dedicated");
-    if (effectiveWalletOption === "dedicated") {
+    if (effectiveWalletOption === "dedicated" || effectiveWalletOption === "metamask_session") {
+      // metamask_session: derive a wallet now, ERC-7715 session key flow happens post-creation
       try {
         walletDerivationIndex = await getNextDerivationIndex();
         agentWalletAddress = deriveAddress(walletDerivationIndex);
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
           ownerId: user.id,
           agentWalletAddress,
           walletDerivationIndex,
+          walletType: effectiveWalletOption,
           status: source === "import" ? "active" : "deploying",
           deployedAt: source === "import" ? new Date() : null,
           erc8004AgentId: erc8004AgentId || externalAgentId,

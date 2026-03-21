@@ -12,9 +12,11 @@
  * transaction receipt block.
  */
 
-import { type Address, isAddress, parseUnits } from "viem";
-import { sendCelo, sendToken, getWalletBalance, getPublicClient, detectFeeCurrency, getFeeCurrencyLabel, deriveAddress } from "./wallet";
+import { type Address, isAddress, parseUnits, createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { getWalletBalance, getPublicClient, detectFeeCurrency, getFeeCurrencyLabel, deriveAddress, getAgentWalletClient, getActiveChain, getRpcUrl } from "./wallet";
 import { getTokenBalanceWei } from "./celoData";
+import { getSessionPermission } from "./session-keys";
 import { prisma } from "@/lib/db";
 import { CELO_TOKENS, BLOCK_EXPLORER } from "@/lib/constants";
 
@@ -119,6 +121,7 @@ function getTokenInfo(currency: string) {
 
 /**
  * Execute a single transaction intent using the agent's wallet.
+ * Supports both HD-derived wallets and ERC-7715 session keys.
  */
 async function executeIntent(
   intent: TransactionIntent,
@@ -144,22 +147,49 @@ async function executeIntent(
   }
 
   try {
-    let txHash: string;
+    const hdAddress = deriveAddress(walletIndex);
 
-    // Detect which fee currency will be used (for reporting)
-    const { deriveAddress } = await import("./wallet");
-    const agentAddress = deriveAddress(walletIndex);
-    const feeCurrencyAddr = await detectFeeCurrency(agentAddress);
+    // Check for ERC-7715 session key — if active, use it for signing
+    const session = await getSessionPermission(agentId);
+    let signerAddress: Address;
+    let walletClient: ReturnType<typeof createWalletClient>;
+    let usingSessionKey = false;
+
+    if (session) {
+      // Session key is active: decrypt and use it
+      const sessionAccount = privateKeyToAccount(`0x${session.sessionPrivateKey}` as `0x${string}`);
+      signerAddress = sessionAccount.address as Address;
+      walletClient = createWalletClient({
+        account: sessionAccount,
+        chain: getActiveChain(),
+        transport: http(getRpcUrl()),
+      });
+      usingSessionKey = true;
+      console.log(`[Executor] Using ERC-7715 session key: ${signerAddress}`);
+    } else {
+      // Fall back to HD wallet
+      signerAddress = hdAddress;
+      walletClient = getAgentWalletClient(walletIndex);
+    }
+
+    // Detect fee currency for reporting
+    const feeCurrencyAddr = await detectFeeCurrency(signerAddress);
     const feeCurrencyLabel = getFeeCurrencyLabel(feeCurrencyAddr);
 
+    let txHash: string;
+
+    // ── Resolve amount in wei ────────────────────────────────────────────────
+    const amountFormatted = String(intent.amount).replace(/,/g, "");
+
     if (intent.action === "send_celo") {
-      txHash = await sendCelo(walletIndex, intent.to as Address, intent.amount);
+      const value = parseEtherSafe(amountFormatted);
+      const txParams = buildTxParams(signerAddress, intent.to as Address, value, undefined);
+      txHash = await walletClient.sendTransaction(txParams);
     } else if (intent.action === "send_agent_token" && intent.tokenAddress && validateAddress(intent.tokenAddress)) {
-      // Check balance before sending — avoid "Insufficient balance" revert
-      const balanceWei = await getTokenBalanceWei(intent.tokenAddress as Address, agentAddress);
+      const balanceWei = await getTokenBalanceWei(intent.tokenAddress as Address, signerAddress);
       let amountWei: bigint;
       try {
-        amountWei = parseUnits(intent.amount, 18);
+        amountWei = parseUnits(amountFormatted, 18);
       } catch {
         return {
           success: false,
@@ -171,19 +201,15 @@ async function executeIntent(
         const balanceHuman = (Number(balanceWei) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 });
         return {
           success: false,
-          error: `Insufficient balance. Wallet has ${balanceHuman} tokens, but ${intent.amount} requested. Deploy the token with this agent wallet first, or use a token this wallet holds.`,
+          error: `Insufficient balance. Wallet has ${balanceHuman} tokens, but ${intent.amount} requested.`,
           intent,
         };
       }
-      txHash = await sendToken(
-        walletIndex,
-        intent.tokenAddress as Address,
-        intent.to as Address,
-        intent.amount,
-        18
+      txHash = await sendTokenWithClient(
+        walletClient, signerAddress, intent.tokenAddress as Address,
+        intent.to as Address, amountFormatted, 18, feeCurrencyAddr
       );
     } else {
-      // send_token
       const tokenInfo = getTokenInfo(intent.currency);
       if (!tokenInfo) {
         return {
@@ -193,15 +219,14 @@ async function executeIntent(
         };
       }
       if (tokenInfo.address === "0x0000000000000000000000000000000000000000") {
-        // CELO native — use sendCelo
-        txHash = await sendCelo(walletIndex, intent.to as Address, intent.amount);
+        const value = parseEtherSafe(amountFormatted);
+        txHash = await walletClient.sendTransaction(
+          buildTxParams(signerAddress, intent.to as Address, value, undefined)
+        );
       } else {
-        txHash = await sendToken(
-          walletIndex,
-          tokenInfo.address as Address,
-          intent.to as Address,
-          intent.amount,
-          tokenInfo.decimals
+        txHash = await sendTokenWithClient(
+          walletClient, signerAddress, tokenInfo.address as Address,
+          intent.to as Address, amountFormatted, tokenInfo.decimals, feeCurrencyAddr
         );
       }
     }
@@ -213,7 +238,7 @@ async function executeIntent(
       timeout: 30_000,
     });
 
-    // Record in DB
+    const signerLabel = usingSessionKey ? `session key ${signerAddress}` : `HD wallet ${signerAddress}`;
     await prisma.transaction.create({
       data: {
         agentId,
@@ -225,7 +250,7 @@ async function executeIntent(
         currency: intent.currency,
         gasUsed: receipt.gasUsed ? Number(receipt.gasUsed) / 1e18 : null,
         blockNumber: receipt.blockNumber ? Number(receipt.blockNumber) : null,
-        description: `Sent ${intent.amount} ${intent.currency} to ${intent.to} (gas: ${feeCurrencyLabel})`,
+        description: `Sent ${intent.amount} ${intent.currency} to ${intent.to} via ${signerLabel} (gas: ${feeCurrencyLabel})`,
       },
     });
 
@@ -242,24 +267,39 @@ async function executeIntent(
     if (isNonceTooLow) {
       console.warn(`Transaction failed (nonce too low), retrying once...`);
       try {
+        // Re-check session key for retry
+        const sessionRetry = await getSessionPermission(agentId);
+        let signerAddressRetry: Address;
+        let walletClientRetry: ReturnType<typeof createWalletClient>;
+        if (sessionRetry) {
+          const account = privateKeyToAccount(`0x${sessionRetry.sessionPrivateKey}` as `0x${string}`);
+          signerAddressRetry = account.address as Address;
+          walletClientRetry = createWalletClient({ account, chain: getActiveChain(), transport: http(getRpcUrl()) });
+        } else {
+          signerAddressRetry = deriveAddress(walletIndex);
+          walletClientRetry = getAgentWalletClient(walletIndex);
+        }
+        const feeCurrencyAddr = await detectFeeCurrency(signerAddressRetry);
+        const feeCurrencyLabel = getFeeCurrencyLabel(feeCurrencyAddr);
+        const amountFormatted = String(intent.amount).replace(/,/g, "");
+
         let txHashRetry: string;
-        if (intent.action === "send_celo") {
-          txHashRetry = await sendCelo(walletIndex, intent.to as Address, intent.amount);
-        } else if (intent.action === "send_agent_token" && intent.tokenAddress && validateAddress(intent.tokenAddress)) {
-          txHashRetry = await sendToken(walletIndex, intent.tokenAddress as Address, intent.to as Address, intent.amount, 18);
+        if (intent.action === "send_celo" || (!intent.tokenAddress && !["cUSD","cEUR","cREAL"].includes(intent.currency.toUpperCase()))) {
+          txHashRetry = await walletClientRetry.sendTransaction(
+            buildTxParams(signerAddressRetry, intent.to as Address, parseEtherSafe(amountFormatted), undefined)
+          );
         } else {
           const tokenInfo = getTokenInfo(intent.currency);
-          if (!tokenInfo) throw error;
-          if (tokenInfo.address === "0x0000000000000000000000000000000000000000") {
-            txHashRetry = await sendCelo(walletIndex, intent.to as Address, intent.amount);
-          } else {
-            txHashRetry = await sendToken(walletIndex, tokenInfo.address as Address, intent.to as Address, intent.amount, tokenInfo.decimals);
-          }
+          const addr = intent.tokenAddress || tokenInfo?.address;
+          const decimals = intent.tokenAddress ? 18 : (tokenInfo?.decimals ?? 18);
+          txHashRetry = await sendTokenWithClient(
+            walletClientRetry, signerAddressRetry, addr as Address,
+            intent.to as Address, amountFormatted, decimals, feeCurrencyAddr
+          );
         }
+
         const publicClient = getPublicClient();
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHashRetry as `0x${string}`, timeout: 30_000 });
-        const feeCurrencyAddr = await detectFeeCurrency(deriveAddress(walletIndex));
-        const feeCurrencyLabel = getFeeCurrencyLabel(feeCurrencyAddr);
         await prisma.transaction.create({
           data: {
             agentId,
@@ -271,7 +311,7 @@ async function executeIntent(
             currency: intent.currency,
             gasUsed: receipt.gasUsed ? Number(receipt.gasUsed) / 1e18 : null,
             blockNumber: receipt.blockNumber ? Number(receipt.blockNumber) : null,
-            description: `Sent ${intent.amount} ${intent.currency} to ${intent.to} (gas: ${feeCurrencyLabel})`,
+            description: `Sent ${intent.amount} ${intent.currency} to ${intent.to} (retry, gas: ${feeCurrencyLabel})`,
           },
         });
         return { success: receipt.status === "success", txHash: txHashRetry, intent, feeCurrencyUsed: feeCurrencyLabel };
@@ -281,8 +321,6 @@ async function executeIntent(
     }
 
     console.error(`Transaction execution failed:`, msg);
-
-    // Record failed tx in DB
     await prisma.transaction.create({
       data: {
         agentId,
@@ -301,6 +339,68 @@ async function executeIntent(
       intent,
     };
   }
+}
+
+function parseEtherSafe(amount: string) {
+  const n = parseFloat(amount);
+  return parseUnits(n.toFixed(18), 18);
+}
+
+function buildTxParams(
+  from: Address,
+  to: Address,
+  value: bigint,
+  feeCurrency: Address | undefined
+): Parameters<ReturnType<typeof createWalletClient>["sendTransaction"]>[0] {
+  const params: Parameters<ReturnType<typeof createWalletClient>["sendTransaction"]>[0] = {
+    account: from,
+    to,
+    value,
+    chain: getActiveChain(),
+  };
+  if (feeCurrency) {
+    (params as Record<string, unknown>).feeCurrency = feeCurrency;
+  }
+  return params;
+}
+
+async function sendTokenWithClient(
+  walletClient: ReturnType<typeof createWalletClient>,
+  from: Address,
+  tokenAddress: Address,
+  to: Address,
+  amount: string,
+  decimals: number,
+  feeCurrency: Address | undefined
+): Promise<string> {
+  const { encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: [
+      {
+        name: "transfer",
+        type: "function",
+        stateMutability: "nonpayable",
+        inputs: [
+          { name: "to", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+        outputs: [{ name: "success", type: "bool" }],
+      },
+    ],
+    functionName: "transfer",
+    args: [to, parseUnits(amount.replace(/,/g, ""), decimals)],
+  });
+
+  const txParams: Parameters<ReturnType<typeof createWalletClient>["sendTransaction"]>[0] = {
+    account: from,
+    to: tokenAddress,
+    data,
+    chain: getActiveChain(),
+  };
+  if (feeCurrency) {
+    (txParams as Record<string, unknown>).feeCurrency = feeCurrency;
+  }
+  return walletClient.sendTransaction(txParams);
 }
 
 // ─── Format Results ───────────────────────────────────────────────────────────

@@ -40,7 +40,7 @@ export function getActiveChain(): Chain {
   return ACTIVE_CHAIN_ID === CELO_SEPOLIA_CHAIN_ID ? celoSepolia : celo;
 }
 
-function getRpcUrl(): string {
+export function getRpcUrl(): string {
   const chain = getActiveChain();
   return (
     process.env.CELO_RPC_URL ||
@@ -64,7 +64,7 @@ export function getPublicClient(): PublicClient {
 
 // ─── Mnemonic & HD Derivation ────────────────────────────────────────────────
 
-function getMnemonic(): string {
+export function getMnemonic(): string {
   const mnemonic = process.env.AGENT_MNEMONIC;
   if (!mnemonic) {
     throw new Error(

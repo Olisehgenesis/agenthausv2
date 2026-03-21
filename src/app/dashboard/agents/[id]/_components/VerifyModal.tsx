@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -170,6 +171,19 @@ export function VerifyModal({
             <p className="text-[10px] text-forest-muted/70 mt-1">
               If you verified on another device, this will sync your status.
             </p>
+          </div>
+        )}
+
+        {/* ── Full-page fallback for users who prefer no modal ── */}
+        {!verificationStatus?.verified && (
+          <div className="pt-2 border-t border-forest/10">
+            <Link
+              href={`/dashboard/agents/${agent.id}/verify`}
+              className="text-xs text-accent hover:text-accent-light inline-flex items-center gap-1.5"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Open verify page (no modal)
+            </Link>
           </div>
         )}
       </div>

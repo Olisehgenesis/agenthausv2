@@ -470,6 +470,43 @@ const SKILL_DEFINITIONS: SkillDefinition[] = [
     requiresWallet: false,
     mutatesState: false,
   },
+  // ── Haus Name / x402 Skills ──────────────────────────────────────────────
+  {
+    id: "buy_haus_name",
+    name: "Buy Haus Name",
+    description: "Register a .agenthaus.eth subdomain name for this agent via x402 payment",
+    category: "data",
+    commandTag: "BUY_HAUS_NAME",
+    params: [
+      { name: "name", description: "Subdomain name (without .agenthaus.eth, 3-20 chars, lowercase alphanumeric)", required: true, example: "myagent" },
+    ],
+    zodSchema: z.object({
+      name: z.string().min(3).max(20).regex(/^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/, "Must be 3-20 lowercase alphanumeric chars"),
+    }),
+    examples: [
+      { input: "buy the haus name 'trader' for me", output: "[[BUY_HAUS_NAME|trader]]" },
+      { input: "register 'alex' as my agent name", output: "[[BUY_HAUS_NAME|alex]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: true,
+  },
+  {
+    id: "check_haus_name_price",
+    name: "Check Haus Name Price",
+    description: "Check the price for a .agenthaus.eth subdomain name",
+    category: "data",
+    commandTag: "CHECK_HAUS_NAME_PRICE",
+    params: [
+      { name: "name", description: "Subdomain name to check (without .agenthaus.eth)", required: true, example: "myagent" },
+    ],
+    examples: [
+      { input: "how much is 'trader'?", output: "[[CHECK_HAUS_NAME_PRICE|trader]]" },
+      { input: "what does 'alex' cost?", output: "[[CHECK_HAUS_NAME_PRICE|alex]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: false,
+  },
+
   // ── QR Code Skills ────────────────────────────────────────────────────────
   {
     id: "generate_qr",
@@ -570,6 +607,134 @@ const SKILL_DEFINITIONS: SkillDefinition[] = [
     ],
     requiresWallet: true,
     mutatesState: true,
+  },
+
+  // ── Uniswap Trading API Skills ──────────────────────────────────────
+  {
+    id: "uniswap_quote",
+    name: "Uniswap Quote",
+    description: "Get a swap quote from Uniswap Trading API (supports Ethereum, Base, Arbitrum, Polygon, Optimism, etc. — NOT Celo. For Celo use MENTO_QUOTE). Returns expected output amount, route, and gas estimate.",
+    category: "defi",
+    commandTag: "UNISWAP_QUOTE",
+    params: [
+      { name: "sell_token", description: "Token address or symbol (e.g. WETH, USDC, 0x...)", required: true, example: "WETH" },
+      { name: "buy_token", description: "Token address or symbol (e.g. USDC, WBTC, 0x...)", required: true, example: "USDC" },
+      { name: "amount", description: "Amount to sell (in token units, e.g. 1.0)", required: true, example: "1.0" },
+      { name: "sell_chain", description: "Chain ID (1=Eth, 137=Polygon, 8453=Base, 10=OP, 42220=Celo)", required: false, example: "1" },
+      { name: "buy_chain", description: "Chain ID for output token (same as sell_chain if omitted)", required: false, example: "1" },
+    ],
+    examples: [
+      { input: "quote swapping 2 WETH for USDC on Ethereum", output: "[[UNISWAP_QUOTE|WETH|USDC|2|1|1]]" },
+      { input: "quote 1000 USDC to WETH on Base", output: "[[UNISWAP_QUOTE|USDC|WETH|1000|8453|8453]]" },
+      { input: "quote WBTC to USDC on Arbitrum", output: "[[UNISWAP_QUOTE|WBTC|USDC|0.5|42161|42161]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: false,
+  },
+  {
+    id: "uniswap_swap",
+    name: "Uniswap Swap Execute",
+    description: "Execute a token swap on Uniswap Trading API (Ethereum, Base, Arbitrum, Polygon, Optimism). Requires wallet config on target chain. For Celo use MENTO_SWAP.",
+    category: "defi",
+    commandTag: "UNISWAP_SWAP",
+    params: [
+      { name: "sell_token", description: "Token address or symbol", required: true, example: "WETH" },
+      { name: "buy_token", description: "Token address or symbol", required: true, example: "USDC" },
+      { name: "amount", description: "Amount to sell", required: true, example: "1.0" },
+      { name: "chain_id", description: "Chain ID (default: 1 for Ethereum)", required: false, example: "8453" },
+    ],
+    examples: [
+      { input: "swap 1 WETH for USDC on Ethereum", output: "[[UNISWAP_SWAP|WETH|USDC|1|1]]" },
+      { input: "swap 500 USDC for ETH on Base", output: "[[UNISWAP_SWAP|USDC|WETH|500|8453]]" },
+    ],
+    requiresWallet: true,
+    mutatesState: true,
+  },
+  {
+    id: "uniswap_cross_chain",
+    name: "Uniswap Cross-Chain Swap",
+    description: "Execute a cross-chain swap via UniswapX. Bridge tokens between chains (e.g. ETH on Ethereum → CELO on Celo, or USDC on Base → MATIC on Polygon). Uses Dutch auction pricing for optimal execution.",
+    category: "defi",
+    commandTag: "UNISWAP_CROSS_CHAIN",
+    params: [
+      { name: "sell_token", description: "Token address or symbol on source chain", required: true, example: "USDC" },
+      { name: "buy_token", description: "Token address or symbol on destination chain", required: true, example: "USDC" },
+      { name: "amount", description: "Amount to sell", required: true, example: "100" },
+      { name: "source_chain", description: "Source chain ID (e.g. 1=Ethereum, 8453=Base)", required: true, example: "8453" },
+      { name: "dest_chain", description: "Destination chain ID (e.g. 42220=Celo, 137=Polygon)", required: true, example: "42220" },
+    ],
+    examples: [
+      { input: "bridge 100 USDC from Base to Polygon", output: "[[UNISWAP_CROSS_CHAIN|USDC|USDC|100|8453|137]]" },
+      { input: "bridge ETH from Ethereum to Celo", output: "[[UNISWAP_CROSS_CHAIN|ETH|WETH|2|1|42220]]" },
+    ],
+    requiresWallet: true,
+    mutatesState: true,
+  },
+
+  // ── Storage / IPFS Skills ───────────────────────────────────────────
+  {
+    id: "save_memory",
+    name: "Save Memory to IPFS",
+    description: "Save agent memory or conversation history to decentralized IPFS/Filecoin storage via Storacha or Pinata",
+    category: "storage",
+    commandTag: "SAVE_MEMORY",
+    params: [
+      { name: "data_type", description: "Type of data: 'memory', 'conversation', 'state', or 'custom'", required: false, example: "memory" },
+      { name: "content", description: "JSON content to save (stringified object or plain text)", required: true, example: '{"key": "value"}' },
+    ],
+    examples: [
+      { input: "save my conversation history", output: "[[SAVE_MEMORY|conversation|{\"history\": [...]}]" },
+      { input: "persist agent memory", output: "[[SAVE_MEMORY|memory|{\"preferences\": {...}}]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: false,
+  },
+  {
+    id: "load_memory",
+    name: "Load Memory from IPFS",
+    description: "Load previously saved agent memory or data from IPFS by CID",
+    category: "storage",
+    commandTag: "LOAD_MEMORY",
+    params: [
+      { name: "cid", description: "IPFS CID to retrieve (e.g. Qm... or bafy...)", required: true, example: "QmXrz..." },
+    ],
+    examples: [
+      { input: "load memory from QmXrz", output: "[[LOAD_MEMORY|QmXrzAY7P...]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: false,
+  },
+  {
+    id: "save_data",
+    name: "Save Data to IPFS",
+    description: "Store arbitrary JSON data to IPFS via Pinata. Returns a CID for later retrieval.",
+    category: "storage",
+    commandTag: "SAVE_DATA",
+    params: [
+      { name: "filename", description: "Filename for the data (e.g. trades.json, config.json)", required: false, example: "trades.json" },
+      { name: "data", description: "JSON data as string", required: true, example: '{"open": 1.5, "close": 1.6}' },
+    ],
+    examples: [
+      { input: "save my trade history", output: "[[SAVE_DATA|trades.json|{\"trades\": [...]}]]" },
+      { input: "store agent config", output: "[[SAVE_DATA|config.json|{\"model\": \"claude\", \"maxSpend\": 100}]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: false,
+  },
+  {
+    id: "load_data",
+    name: "Load Data from IPFS",
+    description: "Retrieve JSON data from IPFS by CID using multiple gateway fallbacks",
+    category: "storage",
+    commandTag: "LOAD_DATA",
+    params: [
+      { name: "cid", description: "IPFS CID (Qm... or bafy...)", required: true, example: "QmABC..." },
+    ],
+    examples: [
+      { input: "load trade data", output: "[[LOAD_DATA|QmABC123...]]" },
+    ],
+    requiresWallet: false,
+    mutatesState: false,
   },
 ];
 

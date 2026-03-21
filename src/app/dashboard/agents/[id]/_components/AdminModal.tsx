@@ -652,9 +652,15 @@ export function AdminModal({
           {verificationStatus?.verified ? (
             <p className="text-sm text-forest-muted">Agent is verified with Self Protocol.</p>
           ) : (
-            <Button variant="glow" size="sm" onClick={() => { onClose(); onOpenVerifyModal(); }}>
-              Verify with Self
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="glow" size="sm" onClick={() => { onClose(); onOpenVerifyModal(); }}>
+                Verify with Self
+              </Button>
+              <Link href={`/dashboard/agents/${agent.id}/verify`} className="text-xs text-accent hover:text-accent-light inline-flex items-center gap-1.5">
+                <ExternalLink className="w-3 h-3" />
+                Open verify page
+              </Link>
+            </div>
           )}
         </div>
 

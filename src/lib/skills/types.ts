@@ -23,10 +23,11 @@ export type SkillCategory =
   | "mento"         // Mento protocol exchange/swap
   | "oracle"        // Price feeds & oracle data
   | "data"          // Balance checks, gas prices, token info
-  | "defi"          // DeFi interactions (Ubeswap, etc.)
+  | "defi"          // Uniswap / cross-chain DeFi
   | "social"        // Social / tipping
   | "trading"       // Automated trading tasks
-  | "forex";        // Forex trading / analysis
+  | "forex"         // Forex trading / analysis
+  | "storage";      // IPFS / Filecoin / decentralized storage
 
 // ─── Skill Definition ─────────────────────────────────────────────────────────
 

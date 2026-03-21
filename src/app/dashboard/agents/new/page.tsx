@@ -71,7 +71,7 @@ export default function NewAgentPage() {
   const [llmModel, setLlmModel] = React.useState("llama-3.3-70b-versatile");
   const [spendingLimit, setSpendingLimit] = React.useState(100);
   const [config, setConfig] = React.useState<AgentConfig>({});
-  const [walletOption, setWalletOption] = React.useState<"dedicated" | "owner" | "later">("dedicated");
+  const [walletOption, setWalletOption] = React.useState<"dedicated" | "owner" | "later" | "metamask_session">("dedicated");
   const [apiKey, setApiKey] = React.useState("");
   const [apiKeySaving, setApiKeySaving] = React.useState(false);
   const [apiKeySaved, setApiKeySaved] = React.useState(false);

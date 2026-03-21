@@ -17,6 +17,11 @@ export interface AgentData {
   spendingUsed: number;
   agentWalletAddress: string | null;
   walletDerivationIndex?: number | null;
+  walletType?: string | null;
+  sessionKeyAddress?: string | null;
+  sessionContext?: string | null;
+  sessionExpiresAt?: string | null;
+  sessionPermissions?: string | null;
   erc8004AgentId: string | null;
   erc8004URI: string | null;
   erc8004TxHash: string | null;

@@ -7,7 +7,8 @@
  * Handlers lazy-import heavy blockchain libs so the module tree-shakes well.
  */
 
-import { type Address, isAddress } from "viem";
+import { type Address, isAddress, createPublicClient, createWalletClient, http, formatUnits, parseUnits, type Chain } from "viem";
+import { celo, celoSepolia, mainnet, optimism, polygon, arbitrum, avalanche, base, sepolia, optimismSepolia, arbitrumSepolia, scroll, linea, bsc, gnosis, baseSepolia } from "viem/chains";
 import {
   getNetworkStatus,
   getBlock,
@@ -137,91 +138,6 @@ export async function executeMentoSwap(params: string[], ctx: SkillContext): Pro
   } catch (error) {
     return { success: false, error: String(error), display: `❌ Swap failed: ${error}` };
   }
-}
-
-export async function executeConnectMetaMask(_params: string[], ctx: SkillContext): Promise<SkillResult> {
-  if (!ctx.agentWalletAddress) {
-    const display = [
-      fmtHeader("MetaMask Connection", "🔐"),
-      "",
-      fmtBullet("No wallet currently connected to this agent."),
-      fmtBullet("Run the web UI MetaMask connect flow to grant access."),
-      "",
-      fmtMeta("Use the Agent Dashboard 'Connect Wallet' button to authorize.")
-    ].join("\n");
-    return { success: false, display, error: "No agent wallet connected" };
-  }
-
-  const display = [
-    fmtHeader("MetaMask Connection", "✅"),
-    "",
-    fmtBullet(`Connected agent wallet: ${ctx.agentWalletAddress}`),
-    fmtBullet(`Derivation index: ${ctx.walletDerivationIndex ?? "unknown"}`),
-    "",
-    fmtMeta("Agent is MetaMask-compatible and ready for onchain operations."),
-  ].join("\n");
-
-  return { success: true, data: { address: ctx.agentWalletAddress } as unknown as Record<string, unknown>, display };
-}
-
-export async function executeUniswapQuote(params: string[], _ctx: SkillContext): Promise<SkillResult> {
-  const [sellCurrency, buyCurrency, amount] = params;
-  if (!sellCurrency || !buyCurrency || !amount) {
-    return { success: false, error: "Missing parameters", display: "❌ Usage: [[UNISWAP_QUOTE|sell_currency|buy_currency|amount]]" };
-  }
-
-  const result = await executeMentoQuote([sellCurrency, buyCurrency, amount], _ctx);
-  if (!result.success) {
-    return { success: false, error: result.error, display: `❌ Uniswap-style quote failed: ${result.error}` };
-  }
-
-  const display = [`${result.display}`].join("\n");
-  return { success: true, data: result.data, display };
-}
-
-export async function executeUniswapSwap(params: string[], ctx: SkillContext): Promise<SkillResult> {
-  const [sellCurrency, buyCurrency, amount] = params;
-  if (!sellCurrency || !buyCurrency || !amount) {
-    return { success: false, error: "Missing parameters", display: "❌ Usage: [[UNISWAP_SWAP|sell_currency|buy_currency|amount]]" };
-  }
-
-  const result = await executeMentoSwap([sellCurrency, buyCurrency, amount], ctx);
-  if (!result.success) {
-    return { success: false, error: result.error, display: `❌ Uniswap-style swap failed: ${result.error}` };
-  }
-
-  const display = [
-    fmtHeader("Uniswap-style Swap", "🦄"),
-    "",
-    fmtBullet("Executed via Celo Mento path simulation."),
-    "",
-    result.display,
-    "",
-    fmtMeta("Use this for Uniswap-compatible intent on Celo.")
-  ].join("\n");
-
-  return { success: true, data: result.data, display };
-}
-
-export async function executeVirtualsACP(params: string[], ctx: SkillContext): Promise<SkillResult> {
-  const [action] = params;
-  if (!action) {
-    return { success: false, error: "Missing action", display: "❌ Usage: [[VIRTUALS_ACP|action]]" };
-  }
-
-  const agent = ctx.agentId ?? "unknown";
-
-  const display = [
-    fmtHeader("Virtuals ACP Cross-Agent Commerce", "🤖"),
-    "",
-    fmtBullet(`Agent: ${agent}`),
-    fmtBullet(`Action: ${action}`),
-    fmtBullet("Status: Simulation (requires Virtuals network integration)."),
-    "",
-    fmtMeta("In production, this would route through Virtuals ACP with SelfProtocol identity + Filecoin storage path."),
-  ].join("\n");
-
-  return { success: true, data: { action, agent } as unknown as Record<string, unknown>, display };
 }
 
 // ─── Data handlers ───────────────────────────────────────────────────────────
@@ -1402,6 +1318,323 @@ export async function executeSaveSelfClawApiKey(
   }
 }
 
+// ─── Haus Name / x402 handlers ──────────────────────────────────────────────
+
+const HAUS_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$/;
+const PLATFORM_PAYMENT_WALLET = "0x9b6A52A88a1Ee029Bd14170fFb8fB15839Bd18cB";
+const USDC_ADDRESS_CELO = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
+const FACILITATOR_URL = "https://facilitator.ultravioletadao.xyz";
+const CELO_CHAIN_ID = 42220;
+
+export async function executeCheckHausNamePrice(
+  params: string[],
+  _ctx: SkillContext
+): Promise<SkillResult> {
+  const name = params[0]?.trim()?.toLowerCase();
+  if (!name) {
+    return { success: false, error: "Missing name", display: "Usage: [[CHECK_HAUS_NAME_PRICE|name]]" };
+  }
+
+  const { getHausNamePrice, formatHausNamePrice } = await import("@/lib/pricing");
+
+  const price = getHausNamePrice(name);
+  const isValid = HAUS_NAME_PATTERN.test(name) && name.length >= 3 && name.length <= 20;
+
+  const tierLines = [
+    "3 chars: $30.00",
+    "4 chars: $15.00",
+    "5 chars: $5.00",
+    "6 chars: $1.00",
+    "7 chars: $0.30",
+    "8+ chars: $0.10",
+  ];
+
+  const display = [
+    fmtHeader("Haus Name Price Check", "🏠"),
+    "",
+    isValid
+      ? `**${name}.agenthaus.eth** — ${formatHausNamePrice(name)}`
+      : `**${name}** — Invalid format. Use 3-20 lowercase alphanumeric chars.`,
+    "",
+    fmtSection("Price Tiers"),
+    ...tierLines.map((t) => fmtBullet(t)),
+    "",
+    fmtMeta("Pay via x402 (USDC) when you run [[BUY_HAUS_NAME|name]]"),
+  ].join("\n");
+
+  return { success: true, data: { name, price, valid: isValid }, display };
+}
+
+async function getUsdcBalance(walletAddress: string): Promise<string> {
+  const { getTokenBalance } = await import("@/lib/blockchain/celoData");
+  return getTokenBalance(USDC_ADDRESS_CELO, walletAddress as `0x${string}`);
+}
+
+async function signAndExecuteX402Payment(params: {
+  agentId: string;
+  name: string;
+  price: string;
+  fromAddress: string;
+  derivationIndex: number;
+}): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  const { agentId, name, price, fromAddress, derivationIndex } = params;
+
+  try {
+    const { keccak256, toHex, parseUnits } = await import("viem");
+    const { mnemonicToAccount } = await import("viem/accounts");
+    const { getMnemonic } = await import("@/lib/blockchain/wallet");
+
+    const mnemonic = getMnemonic();
+    const account = mnemonicToAccount(mnemonic, { addressIndex: derivationIndex });
+
+    const amountWei = parseUnits(price as `${number}`, 6);
+
+    const nonceBytes = new Uint8Array(32);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = keccak256(toHex(nonceBytes));
+
+    const validAfter = 0;
+    const validBefore = Math.floor(Date.now() / 1000) + 300;
+
+    const domain = {
+      name: "USD Coin",
+      version: "2",
+      chainId: BigInt(CELO_CHAIN_ID),
+      verifyingContract: USDC_ADDRESS_CELO as `0x${string}`,
+    };
+
+    const message = {
+      from: fromAddress as `0x${string}`,
+      to: PLATFORM_PAYMENT_WALLET as `0x${string}`,
+      value: amountWei,
+      validAfter: BigInt(validAfter),
+      validBefore: BigInt(validBefore),
+      nonce: nonce,
+    };
+
+    const types = {
+      TransferWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
+      ],
+    };
+
+    const signature = await account.signTypedData({
+      domain,
+      types,
+      message,
+      primaryType: "TransferWithAuthorization",
+    });
+
+    const x402Payload = {
+      from: fromAddress,
+      to: PLATFORM_PAYMENT_WALLET,
+      value: amountWei.toString(),
+      validAfter,
+      validBefore,
+      nonce: nonce,
+      signature,
+    };
+
+    const x402Header = Buffer.from(JSON.stringify(x402Payload)).toString("base64");
+
+    const response = await fetch("https://agenthaus.space/api/ens/buy-x402", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Payment": x402Header,
+        "PAYMENT-SIGNATURE": x402Header,
+      },
+      body: JSON.stringify({ agentId, name }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || `HTTP ${response.status}` };
+    }
+
+    const result = await response.json();
+    return { success: true, txHash: result.txHash };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function executeBuyHausName(
+  params: string[],
+  ctx: SkillContext
+): Promise<SkillResult> {
+  const name = params[0]?.trim()?.toLowerCase();
+  if (!name) {
+    return { success: false, error: "Missing name", display: "Usage: [[BUY_HAUS_NAME|name]]" };
+  }
+
+  if (!HAUS_NAME_PATTERN.test(name) || name.length < 3 || name.length > 20) {
+    return {
+      success: false,
+      error: "Invalid name format",
+      display: "❌ Name must be 3-20 lowercase alphanumeric characters (hyphens allowed in middle). Example: `myagent`",
+    };
+  }
+
+  if (!ctx.agentId) {
+    return { success: false, error: "No agent context", display: "❌ Cannot buy haus name without agent context." };
+  }
+
+  const { getHausNamePrice } = await import("@/lib/pricing");
+  const { prisma } = await import("@/lib/db");
+
+  const price = getHausNamePrice(name);
+  const fullName = `${name}.agenthaus.eth`;
+
+  const agent = await prisma.agent.findUnique({
+    where: { id: ctx.agentId },
+    select: {
+      walletDerivationIndex: true,
+      agentWalletAddress: true,
+      ensSubdomain: true,
+    },
+  });
+
+  if (!agent) {
+    return { success: false, error: "Agent not found", display: "❌ Agent not found." };
+  }
+
+  if (agent.ensSubdomain?.toLowerCase() === name) {
+    return {
+      success: true,
+      data: { alreadyOwned: true, name: fullName },
+      display: [
+        fmtHeader("Already Owned", "✅"),
+        "",
+        `This agent already owns **${fullName}**!`,
+        "",
+        fmtMeta("No need to buy again."),
+      ].join("\n"),
+    };
+  }
+
+  const existing = await prisma.ensSubdomain.findUnique({
+    where: { name },
+    select: { agentId: true },
+  });
+
+  if (existing && existing.agentId !== ctx.agentId) {
+    return {
+      success: false,
+      error: "Name taken",
+      display: `❌ **${fullName}** is already registered to another agent. Try a different name.`,
+    };
+  }
+
+  const walletAddress = agent.agentWalletAddress;
+  if (!walletAddress) {
+    return {
+      success: false,
+      error: "No wallet",
+      display: "❌ Agent doesn't have a wallet. Deploy the agent with a wallet first.",
+    };
+  }
+
+  const usdcBalance = await getUsdcBalance(walletAddress);
+  const priceNum = parseFloat(price);
+  const hasUsdc = parseFloat(usdcBalance) >= priceNum;
+
+  const displayLines: string[] = [
+    fmtHeader("Buy Haus Name via x402", "🏠"),
+    "",
+    `Registering **${fullName}** for this agent...`,
+    "",
+    fmtSection("Payment Details"),
+    fmtBullet(`Name: **${fullName}**`),
+    fmtBullet(`Price: **${price} USDC**`),
+    fmtBullet(`Your USDC balance: **${parseFloat(usdcBalance).toFixed(4)}**`),
+    "",
+  ];
+
+  if (!hasUsdc) {
+    displayLines.push(
+      fmtSection("Insufficient Balance"),
+      "",
+      `You need at least **${price} USDC** to register this name.`,
+      "",
+      fmtSection("Options"),
+      fmtBullet("1. Send USDC to your wallet and retry"),
+      fmtBullet("2. Use the dashboard to buy via connected wallet"),
+      "",
+      fmtMeta(`Required: ${price} USDC | Your USDC: ${usdcBalance}`)
+    );
+    return { success: false, error: "Insufficient balance", display: displayLines.join("\n") };
+  }
+
+  if (agent.walletDerivationIndex === null) {
+    displayLines.push(
+      fmtSection("Manual Payment Required"),
+      "",
+      "This agent doesn't have a derived wallet for autonomous signing.",
+      "Use the dashboard to complete the purchase.",
+    );
+    return { success: false, error: "No derived wallet", display: displayLines.join("\n") };
+  }
+
+  displayLines.push(fmtSection("Processing x402 Payment..."));
+
+  try {
+    const result = await signAndExecuteX402Payment({
+      agentId: ctx.agentId,
+      name,
+      price,
+      fromAddress: walletAddress,
+      derivationIndex: agent.walletDerivationIndex,
+    });
+
+    if (result.success) {
+      return {
+        success: true,
+        data: { name, fullName, price, txHash: result.txHash },
+        display: [
+          fmtHeader("Haus Name Registered!", "🎉"),
+          "",
+          `**${fullName}** has been successfully registered via x402 payment.`,
+          "",
+          fmtSection("Details"),
+          fmtBullet(`Name: **${fullName}**`),
+          fmtBullet(`Price paid: **${price} USDC**`),
+          result.txHash ? fmtBullet(`Tx: \`${result.txHash.slice(0, 10)}...${result.txHash.slice(-8)}\``) : "",
+          "",
+          fmtMeta("The name is now linked to this agent in the Agent Haus ENS registry."),
+        ].join("\n"),
+      };
+    }
+
+    return {
+      success: false,
+      error: result.error,
+      display: [
+        fmtHeader("Payment Failed", "❌"),
+        "",
+        `Could not process x402 payment: ${result.error}`,
+        "",
+        fmtSection("Troubleshooting"),
+        fmtBullet("Make sure the agent wallet has sufficient USDC"),
+        fmtBullet("Check that the x402 signature is valid"),
+        "",
+        fmtMeta(`Error: ${result.error}`),
+      ].join("\n"),
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: String(err),
+      display: `❌ Failed to sign payment: ${err}`,
+    };
+  }
+}
+
 // ─── QR Code handlers ────────────────────────────────────────────────────────
 
 export async function executeGenerateQR(
@@ -1623,7 +1856,7 @@ export async function executeCreatePriceTrigger(
         agentId: ctx.agentId,
         userId: (await prisma.agent.findUnique({ where: { id: ctx.agentId }, select: { ownerId: true } }))?.ownerId || "",
         triggerType: "price",
-        tokenSymbol: token.toUpperCase(),
+        tokenSymbol: token,
         conditionType: condition,
         targetValue: parseFloat(target),
         baselinePrice: price,
@@ -1944,291 +2177,602 @@ export function formatPeriodLabel(minutes: number): string {
   return `${Math.round(minutes / 1440)} day(s)`;
 }
 
-// ─── IPFS Storage handlers ─────────────────────────────────────────────────
+// ─── Storage / IPFS handlers ────────────────────────────────────────────────
 
-export async function executeStoreToIPFS(params: string[], ctx: SkillContext): Promise<SkillResult> {
-  const [dataStr, filename, keyvaluesStr] = params;
-  
-  if (!dataStr || !filename) {
-    return { 
-      success: false, 
-      error: "Missing parameters", 
-      display: "❌ Usage: [[STORE_TO_IPFS|data_json|filename.json|optional_keyvalues]]" 
-    };
+export async function executeSaveMemory(
+  params: string[],
+  ctx: SkillContext
+): Promise<SkillResult> {
+  const [dataType = "memory", content] = params;
+
+  if (!content) {
+    return { success: false, error: "No content provided", display: "⚠️ Please provide content to save." };
   }
 
-  const { storeJSON, storeData } = await import("@/lib/storage/ipfs-storage");
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    parsed = { content };
+  }
 
   try {
-    let data: Record<string, any>;
-    try {
-      data = JSON.parse(dataStr);
-    } catch {
-      data = { content: dataStr };
+    const { uploadJSON } = await import("@/lib/storage/storacha");
+    const { storeJSON } = await import("@/lib/storage/ipfs-storage");
+
+    const timestamp = new Date().toISOString();
+    const filename = `${ctx.agentId || "agent"}_${dataType}_${Date.now()}.json`;
+    const package_ = {
+      agentId: ctx.agentId || "unknown",
+      agentWallet: ctx.agentWalletAddress || "unknown",
+      timestamp,
+      type: dataType,
+      data: parsed,
+    };
+
+    const storachaResult = await uploadJSON(package_, filename).catch(() => null);
+    const pinataResult = await storeJSON(package_, filename, {
+      agentId: ctx.agentId || "unknown",
+      dataType,
+    }).catch(() => null);
+
+    const primary = pinataResult || storachaResult;
+    if (!primary) {
+      return {
+        success: false,
+        error: "All storage backends failed",
+        display: "❌ Storage failed: PINATA_JWT may not be configured and Storacha login required.",
+      };
     }
 
-    let keyvalues: Record<string, string> = {};
-    if (keyvaluesStr) {
-      try {
-        keyvalues = JSON.parse(keyvaluesStr);
-      } catch {
-        keyvalues = {};
-      }
-    }
-
-    keyvalues.agentId = ctx.agentId;
-    if (ctx.agentWalletAddress) {
-      keyvalues.owner = ctx.agentWalletAddress;
-    }
-
-    const result = await storeJSON(data, filename, keyvalues);
+    const alt = pinataResult && storachaResult
+      ? `\n📦 **Pinata:** ${pinataResult.url}`
+      : "";
 
     const display = [
-      fmtHeader("Stored to IPFS", "📦"),
+      fmtHeader("Memory Saved to IPFS / Filecoin", "✅"),
       "",
-      fmtBullet(`CID: **${result.cid}**`),
-      fmtBullet(`Size: ${result.size} bytes`),
-      fmtBullet(`Gateway: ${result.url}`),
+      fmtBullet(`**Type:** ${dataType}`),
+      fmtBullet(`**CID:** \`${primary.cid}\``),
+      fmtBullet(`**Size:** ${(primary.size / 1024).toFixed(1)} KB`),
+      fmtBullet(`**Gateway:** ${primary.url}`),
+      `${alt}`,
       "",
-      fmtMeta("Data is now permanently stored on IPFS"),
+      fmtMeta(`Saved at ${timestamp}. Use [[LOAD_MEMORY|${primary.cid}]] to retrieve.`),
     ].join("\n");
 
-    return { success: true, data: result as unknown as Record<string, unknown>, display };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: String(error), 
-      display: `❌ Failed to store to IPFS: ${error}` 
-    };
-  }
-}
-
-export async function executeStoreToIPFSCAR(params: string[], _ctx: SkillContext): Promise<SkillResult> {
-  const [dataStr, filename] = params;
-
-  if (!dataStr || !filename) {
-    return {
-      success: false,
-      error: "Missing parameters",
-      display: "❌ Usage: [[STORE_TO_IPFS_CAR|data_json|filename]]",
-    };
-  }
-
-  const { packDataToCar, uploadCarToStoracha } = await import("@/lib/storage/ipfs-car");
-
-  try {
-    let data: string | Record<string, unknown>;
-    try {
-      data = JSON.parse(dataStr);
-    } catch {
-      data = dataStr;
-    }
-
-    const carPackage = await packDataToCar(data, filename);
-
-    const uploaded = await uploadCarToStoracha(carPackage.carBlob, `${filename}.car`);
-
-    const display = [
-      fmtHeader("Stored CAR to Storacha", "📦"),
-      "",
-      fmtBullet(`CAR CID: **${uploaded.cid}**`),
-      fmtBullet(`CAR root CID: **${carPackage.rootCid}**`),
-      fmtBullet(`Size: ${uploaded.size} bytes`),
-      fmtBullet(`CAR URL: ${uploaded.url}`),
-      fmtBullet(`Root URL: ${uploaded.rootUrl}`),
-      "",
-      fmtMeta("Packed data to CAR and uploaded to Storacha"),
-    ].join("\n");
-
-    return {
-      success: true,
-      data: {
-        carCid: uploaded.cid,
-        rootCid: carPackage.rootCid,
-        carUrl: uploaded.url,
-        rootUrl: uploaded.rootUrl,
-        size: uploaded.size,
-      } as unknown as Record<string, unknown>,
-      display,
-    };
+    return { success: true, data: { cid: primary.cid, url: primary.url }, display };
   } catch (error) {
     return {
       success: false,
       error: String(error),
-      display: `❌ Failed to store CAR to Storacha: ${error}`,
+      display: `❌ Save memory failed: ${error}`,
     };
   }
 }
 
-export async function executeRetrieveFromIPFSCAR(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+export async function executeLoadMemory(
+  params: string[],
+  _ctx: SkillContext
+): Promise<SkillResult> {
   const [cid] = params;
 
   if (!cid) {
-    return {
-      success: false,
-      error: "Missing CID",
-      display: "❌ Usage: [[RETRIEVE_FROM_IPFS_CAR|cid]]",
-    };
+    return { success: false, error: "No CID provided", display: "⚠️ Please provide an IPFS CID to load." };
   }
-
-  const { retrieveCarFromCid } = await import("@/lib/storage/ipfs-car");
 
   try {
-    const result = await retrieveCarFromCid(cid);
+    const { retrieveJSON } = await import("@/lib/storage/ipfs-storage");
+
+    const data = await retrieveJSON(cid);
 
     const display = [
-      fmtHeader("Retrieved CAR from IPFS", "📥"),
+      fmtHeader("Loaded from IPFS", "📖"),
       "",
-      fmtBullet(`CID: **${cid}**`),
-      fmtBullet(`Archive URL: ${result.carUrl}`),
-      fmtBullet(`Roots: ${result.roots.join(", ")}`),
-      "",
-      ...result.files.slice(0, 5).map((f) => fmtBullet(`${f.path} (${f.size} bytes)`)),
-      "",
-      fmtMeta("CAR archive retrieved and inspected (file list)."),
-    ].join("\n");
-
-    return {
-      success: true,
-      data: {
-        cid: result.cid,
-        roots: result.roots,
-        files: result.files,
-      } as unknown as Record<string, unknown>,
-      display,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: String(error),
-      display: `❌ Failed to retrieve CAR from IPFS: ${error}`,
-    };
-  }
-}
-
-export async function executeRetrieveFromIPFS(params: string[], _ctx: SkillContext): Promise<SkillResult> {
-  const [cid] = params;
-
-  if (!cid) {
-    return { 
-      success: false, 
-      error: "Missing CID", 
-      display: "❌ Usage: [[RETRIEVE_FROM_IPFS|cid]]" 
-    };
-  }
-
-  const { retrieveJSON, retrieveData } = await import("@/lib/storage/ipfs-storage");
-
-  try {
-    let data: any;
-    try {
-      data = await retrieveJSON(cid);
-    } catch {
-      const rawData = await retrieveData(cid);
-      try {
-        data = JSON.parse(rawData);
-      } catch {
-        data = rawData;
-      }
-    }
-
-    const display = [
-      fmtHeader("Retrieved from IPFS", "📥"),
-      "",
-      fmtBullet(`CID: **${cid}**`),
       fmtCode(JSON.stringify(data, null, 2)),
-      "",
-      fmtMeta("Data retrieved successfully"),
     ].join("\n");
 
-    return { success: true, data: data as unknown as Record<string, unknown>, display };
+    return { success: true, data, display };
   } catch (error) {
-    return { 
-      success: false, 
-      error: String(error), 
-      display: `❌ Failed to retrieve from IPFS: ${error}` 
+    return {
+      success: false,
+      error: String(error),
+      display: `❌ Load failed: ${error}. CID \`${cid}\` may not be pinned or available.`,
     };
   }
 }
 
-export async function executeStoreAgentData(params: string[], ctx: SkillContext): Promise<SkillResult> {
-  const [userDataStr, dataType] = params;
+export async function executeSaveData(
+  params: string[],
+  _ctx: SkillContext
+): Promise<SkillResult> {
+  const [filename = "data.json", data] = params;
 
-  if (!userDataStr || !dataType) {
-    return { 
-      success: false, 
-      error: "Missing parameters", 
-      display: "❌ Usage: [[STORE_AGENT_DATA|userData|dataType]]" 
-    };
+  if (!data) {
+    return { success: false, error: "No data provided", display: "⚠️ Please provide data to save." };
   }
 
-  const { storeAgentUserData } = await import("@/lib/storage/ipfs-storage");
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    parsed = { content: data };
+  }
 
   try {
-    let userData: Record<string, any>;
-    try {
-      userData = JSON.parse(userDataStr);
-    } catch {
-      userData = { content: userDataStr };
-    }
-
-    const result = await storeAgentUserData(
-      ctx.agentId,
-      ctx.agentWalletAddress || "unknown",
-      userData,
-      dataType
-    );
+    const { storeJSON } = await import("@/lib/storage/ipfs-storage");
+    const result = await storeJSON(parsed, filename);
 
     const display = [
-      fmtHeader("Agent Data Stored", "📦"),
+      fmtHeader("Data Saved to IPFS", "✅"),
       "",
-      fmtBullet(`CID: **${result.cid}**`),
-      fmtBullet(`Type: ${dataType}`),
-      fmtBullet(`Agent: ${ctx.agentId}`),
-      fmtBullet(`Gateway: ${result.url}`),
+      fmtBullet(`**Filename:** ${filename}`),
+      fmtBullet(`**CID:** \`${result.cid}\``),
+      fmtBullet(`**Size:** ${(result.size / 1024).toFixed(1)} KB`),
+      fmtBullet(`**Gateway:** ${result.url}`),
       "",
-      fmtCode(`Package timestamp: ${new Date(result.package.timestamp).toISOString()}`),
-      "",
-      fmtMeta("Agent data package stored with metadata"),
+      fmtMeta(`Use [[LOAD_DATA|${result.cid}]] to retrieve.`),
     ].join("\n");
 
-    return { success: true, data: result as unknown as Record<string, unknown>, display };
+    return { success: true, data: { cid: result.cid, url: result.url }, display };
   } catch (error) {
-    return { 
-      success: false, 
-      error: String(error), 
-      display: `❌ Failed to store agent data: ${error}` 
+    return {
+      success: false,
+      error: String(error),
+      display: `❌ Save failed: ${error}. Check that PINATA_JWT is configured.`,
     };
   }
 }
 
-export async function executeGetStorageLinks(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+export async function executeLoadData(
+  params: string[],
+  _ctx: SkillContext
+): Promise<SkillResult> {
   const [cid] = params;
 
   if (!cid) {
-    return { 
-      success: false, 
-      error: "Missing CID", 
-      display: "❌ Usage: [[GET_STORAGE_LINKS|cid]]" 
+    return { success: false, error: "No CID provided", display: "⚠️ Please provide an IPFS CID." };
+  }
+
+  try {
+    const { retrieveJSON } = await import("@/lib/storage/ipfs-storage");
+    const data = await retrieveJSON(cid);
+
+    const display = [
+      fmtHeader("Loaded from IPFS", "📖"),
+      "",
+      fmtCode(JSON.stringify(data, null, 2)),
+    ].join("\n");
+
+    return { success: true, data, display };
+  } catch (error) {
+    return {
+      success: false,
+      error: String(error),
+      display: `❌ Load failed: ${error}. CID \`${cid}\` may not be pinned.`,
+    };
+  }
+}
+
+// ─── Uniswap Trading API handlers ───────────────────────────────────────────
+
+const UNISWAP_SUPPORTED_TOKENS: Record<string, { address: string; decimals: number; chainIds: number[] }> = {
+  ETH: { address: "0x0000000000000000000000000000000000000000", decimals: 18, chainIds: [1, 10, 137, 42161, 43114, 8453, 11155111, 11155420, 421614, 84532, 534352, 59144, 42220, 56, 100] },
+  WETH: { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", decimals: 18, chainIds: [1, 10, 137, 42161, 43114, 8453, 11155111, 11155420, 421614, 84532, 534352, 59144, 56, 100] },
+  USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6, chainIds: [1, 10, 137, 42161, 43114, 8453, 11155111, 11155420, 421614, 84532, 534352, 59144, 42220, 56, 100] },
+  USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6, chainIds: [1, 10, 137, 42161, 43114, 8453, 11155111, 11155420, 421614, 84532, 59144, 56, 100] },
+  WBTC: { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", decimals: 8, chainIds: [1, 10, 137, 42161, 43114, 8453, 11155111, 11155420, 421614, 84532, 534352, 56, 100] },
+  DAI: { address: "0x6B175474E89094C44Da98b954EescdeCB5c8D3E4", decimals: 18, chainIds: [1, 10, 137, 8453, 11155111, 11155420, 421614, 84532] },
+  MATIC: { address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0", decimals: 18, chainIds: [1, 10, 42161, 43114, 8453, 11155111, 11155420, 421614, 84532] },
+  OP: { address: "0x4200000000000000000000000000000000000042", decimals: 18, chainIds: [10, 11155420] },
+  BASE: { address: "0x235eD3AD5b4bC9A25EC2796D8C79b60bDa81bF40", decimals: 18, chainIds: [8453, 84532] },
+  ARB: { address: "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1", decimals: 18, chainIds: [42161, 421614] },
+  CELO: { address: "0x0000000000000000000000000000000000000000", decimals: 18, chainIds: [42220] },
+};
+
+const CHAIN_RPC: Record<number, string> = {
+  1: process.env.ETHEREUM_RPC_URL || "",
+  10: process.env.OPTIMISM_RPC_URL || "",
+  137: process.env.POLYGON_RPC_URL || "",
+  42161: process.env.ARBITRUM_RPC_URL || "",
+  43114: process.env.AVALANCHE_RPC_URL || "",
+  8453: process.env.BASE_RPC_URL || "",
+  84532: process.env.BASE_SEPOLIA_RPC_URL || "",
+  11155111: process.env.SEPOLIA_RPC_URL || "",
+  11155420: process.env.OPTIMISM_SEPOLIA_RPC_URL || "",
+  421614: process.env.ARBITRUM_SEPOLIA_RPC_URL || "",
+  534352: process.env.SCROLL_RPC_URL || "",
+  59144: process.env.LINEA_RPC_URL || "",
+  42220: process.env.CELO_RPC_URL || "",
+  56: process.env.BSC_RPC_URL || "",
+  100: process.env.GNOSIS_RPC_URL || "",
+};
+
+const CHAIN_NAMES: Record<number, string> = {
+  1: "Ethereum",
+  10: "Optimism",
+  137: "Polygon",
+  42161: "Arbitrum",
+  43114: "Avalanche",
+  8453: "Base",
+  84532: "Base Sepolia",
+  11155111: "Sepolia",
+  11155420: "Optimism Sepolia",
+  421614: "Arbitrum Sepolia",
+  534352: "Scroll",
+  59144: "Linea",
+  42220: "Celo",
+  56: "BNB Chain",
+  100: "Gnosis",
+};
+
+function resolveToken(symbolOrAddress: string, chainId: number): { address: string; decimals: number } | null {
+  const upper = symbolOrAddress.toUpperCase();
+  if (UNISWAP_SUPPORTED_TOKENS[upper]) {
+    const token = UNISWAP_SUPPORTED_TOKENS[upper];
+    if (token.chainIds.includes(chainId)) {
+      return { address: token.address, decimals: token.decimals };
+    }
+    return null;
+  }
+  if (isAddress(symbolOrAddress)) {
+    return { address: symbolOrAddress, decimals: 18 };
+  }
+  return null;
+}
+
+function getChainRpc(chainId: number): string | null {
+  return CHAIN_RPC[chainId] || null;
+}
+
+export async function executeUniswapQuote(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [sellToken, buyToken, amount, sellChainStr = "1", buyChainStr] = params;
+
+  if (!sellToken || !buyToken || !amount) {
+    return { success: false, error: "Missing params", display: "❌ Usage: [[UNISWAP_QUOTE|sell_token|buy_token|amount|sell_chain|buy_chain]]" };
+  }
+
+  const sellChainId = parseInt(sellChainStr);
+  const buyChainId = buyChainStr ? parseInt(buyChainStr) : sellChainId;
+
+  if (sellChainId === 42220 && buyChainId === 42220) {
+    return {
+      success: false,
+      error: "Celo-native swap",
+      display: "ℹ️ For Celo-native swaps, use **MENTO_QUOTE** instead — `[[MENTO_QUOTE|cUSD|CELO|10]]`.",
     };
   }
 
-  const { getIPFSGatewayUrls } = await import("@/lib/storage/ipfs-storage");
+  const tokenIn = resolveToken(sellToken, sellChainId);
+  const tokenOut = resolveToken(buyToken, buyChainId);
 
-  const gateways = getIPFSGatewayUrls(cid);
-  
-  const display = [
-    fmtHeader("IPFS Gateway URLs", "🔗"),
-    "",
-    ...gateways.map(g => fmtBullet(g)),
-    "",
-    fmtMeta("Use any gateway to retrieve your data"),
-  ].join("\n");
+  if (!tokenIn) {
+    return { success: false, error: `Unknown token: ${sellToken} on chain ${sellChainId}`, display: `❌ Unknown input token \`${sellToken}\` on ${CHAIN_NAMES[sellChainId] || sellChainId}. Supported: ETH, WETH, USDC, USDT, WBTC, DAI, MATIC, OP, ARB, CELO, or a token address.` };
+  }
+  if (!tokenOut) {
+    return { success: false, error: `Unknown token: ${buyToken} on chain ${buyChainId}`, display: `❌ Unknown output token \`${buyToken}\` on ${CHAIN_NAMES[buyChainId] || buyChainId}. Supported: ETH, WETH, USDC, USDT, WBTC, DAI, MATIC, OP, ARB, CELO, or a token address.` };
+  }
 
-  return { 
-    success: true, 
-    data: { cid, gateways } as unknown as Record<string, unknown>, 
-    display 
-  };
+  const swapper = ctx.agentWalletAddress || "0x0000000000000000000000000000000000000001";
+
+  try {
+    const { getQuote } = await import("@/lib/blockchain/uniswap");
+
+    const quote = await getQuote({
+      type: "EXACT_INPUT",
+      amount: parseUnits(amount, tokenIn.decimals).toString(),
+      tokenIn: tokenIn.address,
+      tokenOut: tokenOut.address,
+      tokenInChainId: sellChainId,
+      tokenOutChainId: buyChainId,
+      swapper,
+      routingPreference: "BEST_PRICE",
+      urgency: "normal",
+      autoSlippage: "DEFAULT",
+    });
+
+    const isCrossChain = sellChainId !== buyChainId;
+    const sellFormatted = formatUnits(BigInt(quote.input.amount), tokenIn.decimals);
+    const buyFormatted = formatUnits(BigInt(quote.output.amount), tokenOut.decimals);
+    const priceImpact = "priceImpact" in quote ? (quote as { priceImpact?: number }).priceImpact : null;
+    const source = "source" in quote ? (quote as { source?: string }).source : "uniswapx";
+    const totalGas = "totalGas" in quote ? (quote as { totalGas?: string }).totalGas : null;
+
+    const lines = [
+      fmtHeader(`${isCrossChain ? "Cross-Chain" : ""} Uniswap Quote`, "🔄"),
+      "",
+      fmtBullet(`Sell: **${parseFloat(sellFormatted).toFixed(6)}** ${sellToken} (${CHAIN_NAMES[sellChainId] || sellChainId})`),
+      fmtBullet(`Buy: ~**${parseFloat(buyFormatted).toFixed(6)}** ${buyToken} (${CHAIN_NAMES[buyChainId] || buyChainId})`),
+      fmtBullet(`Rate: 1 ${sellToken} = ${(parseFloat(buyFormatted) / parseFloat(sellFormatted)).toFixed(6)} ${buyToken}`),
+    ];
+
+    if (priceImpact !== null && priceImpact !== undefined) {
+      lines.push(fmtBullet(`Price impact: **${priceImpact.toFixed(2)}%**`));
+    }
+
+    if (totalGas) {
+      const gasNum = parseFloat(totalGas);
+      lines.push(fmtBullet(`Est. gas: **${(gasNum / 1e6).toFixed(1)}M** gas units`));
+    }
+
+    lines.push(fmtBullet(`Routing: **${source}**`));
+
+    if (isCrossChain) {
+      lines.push("");
+      lines.push(fmtMeta("⚠️ Cross-chain swaps use UniswapX Dutch auction — price improves over the fill window."));
+    }
+
+    lines.push("");
+    lines.push(fmtMeta(`Quote ID: \`${"quoteId" in quote ? (quote as { quoteId?: string }).quoteId : "n/a"}\``));
+
+    return { success: true, data: { quote, sellChainId, buyChainId, swapper } as unknown as Record<string, unknown>, display: lines.join("\n") };
+  } catch (error) {
+    return { success: false, error: String(error), display: `❌ Uniswap quote failed: ${error}` };
+  }
 }
+
+export async function executeUniswapSwap(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [sellToken, buyToken, amount, chainIdStr = "1"] = params;
+
+  if (!sellToken || !buyToken || !amount) {
+    return { success: false, error: "Missing params", display: "❌ Usage: [[UNISWAP_SWAP|sell_token|buy_token|amount|chain_id]]" };
+  }
+
+  if (!ctx.agentWalletAddress || ctx.walletDerivationIndex === null) {
+    return { success: false, error: "No wallet", display: "⚠️ Agent wallet not initialized." };
+  }
+
+  const chainId = parseInt(chainIdStr);
+
+  if (chainId === 42220) {
+    return { success: false, error: "Celo swap", display: "ℹ️ For Celo swaps, use **MENTO_SWAP** instead — `[[MENTO_SWAP|cUSD|CELO|10]]`." };
+  }
+
+  const tokenIn = resolveToken(sellToken, chainId);
+  const tokenOut = resolveToken(buyToken, chainId);
+
+  if (!tokenIn) {
+    return { success: false, error: `Unknown token: ${sellToken}`, display: `❌ Unknown token \`${sellToken}\` on ${CHAIN_NAMES[chainId] || chainId}.` };
+  }
+  if (!tokenOut) {
+    return { success: false, error: `Unknown token: ${buyToken}`, display: `❌ Unknown token \`${buyToken}\` on ${CHAIN_NAMES[chainId] || chainId}.` };
+  }
+
+  const rpcUrl = getChainRpc(chainId);
+  if (!rpcUrl) {
+    return { success: false, error: "No RPC configured", display: `⚠️ No RPC URL configured for ${CHAIN_NAMES[chainId] || chainId}. Set \`${CHAIN_ID_TO_RPC_ENV[chainId]}\` in environment.` };
+  }
+
+  const mnemonic = process.env.AGENT_MNEMONIC;
+  if (!mnemonic) {
+    return { success: false, error: "No mnemonic", display: "⚠️ AGENT_MNEMONIC not set. Cannot sign cross-chain transactions." };
+  }
+
+  try {
+    const { mnemonicToAccount } = await import("viem/accounts");
+    const { getQuote, buildSwap } = await import("@/lib/blockchain/uniswap");
+
+    const quote = await getQuote({
+      type: "EXACT_INPUT",
+      amount: parseUnits(amount, tokenIn.decimals).toString(),
+      tokenIn: tokenIn.address,
+      tokenOut: tokenOut.address,
+      tokenInChainId: chainId,
+      tokenOutChainId: chainId,
+      swapper: ctx.agentWalletAddress,
+      routingPreference: "BEST_PRICE",
+      urgency: "normal",
+      autoSlippage: "DEFAULT",
+    });
+
+    const isClassic = "source" in quote;
+    if (!isClassic) {
+      return {
+        success: true,
+        data: { quote, chainId, status: "needs_wallet_signature" } as unknown as Record<string, unknown>,
+        display: [
+          fmtHeader("UniswapX Dutch Auction Order", "🔄"),
+          "",
+          fmtBullet(`Sell: **${amount}** ${sellToken}`),
+          fmtBullet(`Buy: ~**${formatUnits(BigInt(quote.output.amount), tokenOut.decimals)}** ${buyToken}`),
+          fmtBullet(`Chain: ${CHAIN_NAMES[chainId] || chainId}`),
+          "",
+          fmtMeta("⚠️ This is a Dutch auction order. The agent wallet must sign the order off-chain. Configure the target chain RPC to execute."),
+        ].join("\n"),
+      };
+    }
+
+    const swapRes = await buildSwap({ quote: quote as Parameters<typeof buildSwap>[0]["quote"] });
+    const calldata = swapRes.transactionRequest;
+
+    const account = mnemonicToAccount(mnemonic, { addressIndex: ctx.walletDerivationIndex });
+
+    const chain = getChainForId(chainId);
+    if (!chain) {
+      return { success: false, error: "Unsupported chain", display: `❌ Chain ${chainId} not supported.` };
+    }
+
+    const walletClient = createWalletClient({
+      account,
+      chain,
+      transport: http(rpcUrl),
+    });
+
+    const publicClient = createPublicClient({
+      chain,
+      transport: http(rpcUrl),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      chain,
+      to: calldata.to as `0x${string}`,
+      data: calldata.data as `0x${string}`,
+      value: BigInt(calldata.value || "0"),
+      maxFeePerGas: calldata.maxFeePerGas ? BigInt(calldata.maxFeePerGas) : undefined,
+      maxPriorityFeePerGas: calldata.maxPriorityFeePerGas ? BigInt(calldata.maxPriorityFeePerGas) : undefined,
+    });
+
+    await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 });
+
+    const buyFormatted = formatUnits(BigInt(quote.output.amount), tokenOut.decimals);
+    const explorerBase = getExplorer(chainId);
+
+    return {
+      success: true,
+      data: { txHash, chainId, quote } as unknown as Record<string, unknown>,
+      display: [
+        fmtHeader("Uniswap Swap Confirmed", "✅"),
+        "",
+        fmtBullet(`Sold: **${amount}** ${sellToken}`),
+        fmtBullet(`Bought: ~**${parseFloat(buyFormatted).toFixed(6)}** ${buyToken}`),
+        fmtBullet(`Chain: ${CHAIN_NAMES[chainId] || chainId}`),
+        fmtBullet(`TX: \`${txHash}\``),
+        explorerBase ? fmtBullet(`Explorer: ${explorerBase}/tx/${txHash}`) : "",
+      ].filter(Boolean).join("\n"),
+    };
+  } catch (error) {
+    return { success: false, error: String(error), display: `❌ Uniswap swap failed: ${error}` };
+  }
+}
+
+export async function executeUniswapCrossChain(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [sellToken, buyToken, amount, sourceChainStr, destChainStr] = params;
+
+  if (!sellToken || !buyToken || !amount || !sourceChainStr || !destChainStr) {
+    return { success: false, error: "Missing params", display: "❌ Usage: [[UNISWAP_CROSS_CHAIN|sell_token|buy_token|amount|source_chain|dest_chain]]" };
+  }
+
+  if (!ctx.agentWalletAddress || ctx.walletDerivationIndex === null) {
+    return { success: false, error: "No wallet", display: "⚠️ Agent wallet not initialized." };
+  }
+
+  const sourceChainId = parseInt(sourceChainStr);
+  const destChainId = parseInt(destChainStr);
+
+  const tokenIn = resolveToken(sellToken, sourceChainId);
+  const tokenOut = resolveToken(buyToken, destChainId);
+
+  if (!tokenIn) {
+    return { success: false, error: `Unknown token: ${sellToken}`, display: `❌ Unknown token \`${sellToken}\` on ${CHAIN_NAMES[sourceChainId] || sourceChainId}.` };
+  }
+  if (!tokenOut) {
+    return { success: false, error: `Unknown token: ${buyToken}`, display: `❌ Unknown token \`${buyToken}\` on ${CHAIN_NAMES[destChainId] || destChainId}.` };
+  }
+
+  const rpcUrl = getChainRpc(sourceChainId);
+  if (!rpcUrl) {
+    return { success: false, error: "No RPC configured", display: `⚠️ No RPC URL for ${CHAIN_NAMES[sourceChainId] || sourceChainId}. Set the appropriate *_RPC_URL env var.` };
+  }
+
+  const mnemonic = process.env.AGENT_MNEMONIC;
+  if (!mnemonic) {
+    return { success: false, error: "No mnemonic", display: "⚠️ AGENT_MNEMONIC not set." };
+  }
+
+  try {
+    const { mnemonicToAccount } = await import("viem/accounts");
+    const { getQuote } = await import("@/lib/blockchain/uniswap");
+
+    const quote = await getQuote({
+      type: "EXACT_INPUT",
+      amount: parseUnits(amount, tokenIn.decimals).toString(),
+      tokenIn: tokenIn.address,
+      tokenOut: tokenOut.address,
+      tokenInChainId: sourceChainId,
+      tokenOutChainId: destChainId,
+      swapper: ctx.agentWalletAddress,
+      routingPreference: "DUTCH_V2",
+      urgency: "normal",
+      autoSlippage: "DEFAULT",
+    });
+
+    const sellFormatted = formatUnits(BigInt(quote.input.amount), tokenIn.decimals);
+    const buyFormatted = formatUnits(BigInt(quote.output.amount), tokenOut.decimals);
+    const startAmount = "startAmount" in quote ? (quote as { startAmount: string }).startAmount : quote.output.amount;
+    const endAmount = "endAmount" in quote ? (quote as { endAmount: string }).endAmount : quote.output.amount;
+
+    return {
+      success: true,
+      data: { quote, sourceChainId, destChainId } as unknown as Record<string, unknown>,
+      display: [
+        fmtHeader("UniswapX Cross-Chain Quote", "🌉"),
+        "",
+        fmtBullet(`Sell: **${parseFloat(sellFormatted).toFixed(6)}** ${sellToken} (${CHAIN_NAMES[sourceChainId] || sourceChainId})`),
+        fmtBullet(`Receive: **${parseFloat(buyFormatted).toFixed(6)}** ${buyToken} (${CHAIN_NAMES[destChainId] || destChainId})`),
+        fmtBullet(`Bridge: UniswapX Dutch V2`),
+        "",
+        fmtSection("Dutch Auction Fill Window"),
+        fmtBullet(`Start: ~${formatUnits(BigInt(startAmount), tokenOut.decimals)} ${buyToken}`),
+        fmtBullet(`End: ~${formatUnits(BigInt(endAmount), tokenOut.decimals)} ${buyToken}`),
+        fmtBullet("(Best price at auction end — fills automatically within the window)"),
+        "",
+        fmtMeta("⚠️ Cross-chain execution requires: 1) Approval for input token, 2) Signing the fill tx on source chain. Set the RPC env var for the source chain."),
+      ].join("\n"),
+    };
+  } catch (error) {
+    return { success: false, error: String(error), display: `❌ Cross-chain quote failed: ${error}` };
+  }
+}
+
+function getChainForId(chainId: number): Chain | null {
+  switch (chainId) {
+    case 1: return mainnet;
+    case 10: return optimism;
+    case 137: return polygon;
+    case 42161: return arbitrum;
+    case 43114: return avalanche;
+    case 8453: return base;
+    case 84532: return baseSepolia;
+    case 11155111: return sepolia;
+    case 11155420: return optimismSepolia;
+    case 421614: return arbitrumSepolia;
+    case 534352: return scroll;
+    case 59144: return linea;
+    case 42220: return celo;
+    case 11142220: return celoSepolia;
+    case 56: return bsc;
+    case 100: return gnosis;
+    default: return null;
+  }
+}
+
+function getExplorer(chainId: number): string {
+  const explorers: Record<number, string> = {
+    1: "https://etherscan.io",
+    10: "https://optimistic.etherscan.io",
+    137: "https://polygonscan.com",
+    42161: "https://arbiscan.io",
+    43114: "https://snowtrace.io",
+    8453: "https://basescan.org",
+    84532: "https://sepolia.basescan.org",
+    11155111: "https://sepolia.etherscan.io",
+    11155420: "https://sepolia-optimism.etherscan.io",
+    421614: "https://sepolia.arbiscan.io",
+    534352: "https://scrollscan.com",
+    59144: "https://lineascan.build",
+    42220: "https://celoscan.io",
+    11142220: "https://celo-sepolia.blockscout.com",
+    56: "https://bscscan.com",
+    100: "https://gnosisscan.io",
+  };
+  return explorers[chainId] || "";
+}
+
+const CHAIN_ID_TO_RPC_ENV: Record<number, string> = {
+  1: "ETHEREUM_RPC_URL",
+  10: "OPTIMISM_RPC_URL",
+  137: "POLYGON_RPC_URL",
+  42161: "ARBITRUM_RPC_URL",
+  43114: "AVALANCHE_RPC_URL",
+  8453: "BASE_RPC_URL",
+  84532: "BASE_SEPOLIA_RPC_URL",
+  11155111: "SEPOLIA_RPC_URL",
+  11155420: "OPTIMISM_SEPOLIA_RPC_URL",
+  421614: "ARBITRUM_SEPOLIA_RPC_URL",
+  534352: "SCROLL_RPC_URL",
+  59144: "LINEA_RPC_URL",
+  42220: "CELO_RPC_URL",
+  56: "BSC_RPC_URL",
+  100: "GNOSIS_RPC_URL",
+};
 

@@ -12,6 +12,7 @@ type DeployStatus = "idle" | "creating" | "uploading" | "signing" | "confirming"
 
 const WALLET_OPTION_LABELS: Record<WalletOption, string> = {
   dedicated: "Create dedicated wallet",
+  metamask_session: "MetaMask session (ERC-7715)",
   owner: "Use my connected wallet",
   later: "Initialize later",
 };
