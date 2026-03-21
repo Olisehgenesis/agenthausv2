@@ -223,7 +223,7 @@ export default function HomePage() {
             {(agents.length > 0 ? [...agents, ...agents] : [...FALLBACK_AGENTS, ...FALLBACK_AGENTS]).map((agent, i) => (
               <Link
                 key={i}
-                href={agent.id ? `/public/agents/${agent.id}/chat` : "#"}
+                href={agent.id ? `/dashboard/agents/${agent.id}` : "#"}
                 target="_blank"
                 className="inline-flex items-center gap-3 px-4 py-2 border-2 border-forest bg-gypsum-dark font-bold text-sm neobrutal-shadow hover:bg-white transition-colors cursor-pointer"
               >
