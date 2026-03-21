@@ -1,203 +1,234 @@
 # Agent Haus
 
-**No-code AI agent platform on Celo.** Deploy, verify, and use ERC-8004 agents with built-in wallet, chat, and SelfClaw economy.
+> **Deploy AI agents on Celo in minutes. Give them wallets. Watch them work.**
 
-- **Deploy** — Templates (Payment, Trading, Social, Custom), configure LLM + prompt, register on-chain (ERC-8004).
-- **Verify** — SelfClaw (Self.xyz passport) for humanity proof; ERC-8004 Identity Registry on Celo for trustless identity.
-- **Use** — Chat with agents, run skills (deploy token, request sponsorship, send CELO), connect Telegram/Discord, monitor activity.
+Agent Haus is a no-code platform for deploying, managing, and using ERC-8004 AI agents on Celo — with built-in wallets, chat interfaces, Self.xyz verification, and a full trading stack.
 
-Built on [Next.js](https://nextjs.org), [Prisma](https://prisma.io), [Reown AppKit](https://reown.com/appkit) (Celo wallet), and [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) on Celo.
+**App URL: [https://agenthaus.space](https://agenthaus.space)**
+
+**Live at [agenthaus.space](https://agenthaus.space) | Source: [github.com/Olisehgenesis/agentforge](https://github.com/Olisehgenesis/agentforge)**
+
+## Current repository status
+
+- Updated to use updated webhook and task processing logic (`/api/webhooks/price-update`)
+- Agent dashboard links now correctly resolve to `/dashboard/agents/{agentId}`
+- Price triggers and cron tasks now have robust status handling and failure logging
+- UI marquee cards now open HAUS profile URLs instead of `/chat` pages
+
+---
+
+## What You Can Build
+
+| Use Case | Agent Type | Example |
+|----------|-----------|---------|
+| Send stablecoins on request | Payment Agent | "send 10 cUSD to 0x..." |
+| Swap CELO ↔ stablecoins | Trading Agent | "buy 50 cUSD if CELO drops 5%" |
+| Track FX rates, hedge exposure | Forex Agent | "alert me when cEUR deviates 2%" |
+| Community engagement + tips | Social Agent | "tip @user 0.5 CELO" |
+| Custom on-chain automation | Custom Agent | Any combination |
+
+---
+
+## Features
+
+### Deploy in Minutes
+Pick a template → Configure LLM + prompt → Sign to register on-chain. That's it. Your agent gets a unique ERC-8004 `agentId` on Celo and is discoverable at [8004scan.io](https://www.8004scan.io).
+
+### Built-In Wallet
+Every agent gets an HD wallet (`m/44'/60'/0'/0/{n}`) derived from a master mnemonic. No seed phrases to manage. Gas can be paid in CELO or stablecoins (Celo fee abstraction).
+
+### Prove Humanity
+Agents verify via [Self.xyz](https://self.xyz) — ZK passport proofs. Users scan a QR with the Self app; agents prove they're backed by a real human without exposing personal data. SelfClaw integration handles the full flow.
+
+### Chat with Your Agent
+Natural language → transactions. Agents parse intent, show confirmation, execute on-chain. Available via web dashboard, Telegram, Discord. No code required on either side.
+
+### Full Trading Stack
+Built on Mento Protocol (Celo's native DEX):
+- Live CELO ↔ cUSD/cEUR/cREAL swap quotes and execution
+- Price tracking, trend analysis, momentum predictions
+- Stop-loss / take-profit via price triggers
+- Portfolio tracking in USD
+- Time-based triggers (cron scheduling)
+- On-chain oracle data via SortedOracles
+
+### Decentralized Storage
+Agents can save conversation history, memory, and state to Filecoin via Storacha and Pinata IPFS. Content-addressed CIDs ensure tamper-proof retrieval.
+
+### ERC-8004 Identity
+On-chain identity standard gives every agent:
+- Unique `agentId` (NFT token ID)
+- Public metadata (name, description, services, wallet)
+- Registration on Celo Identity Registry
+- Reputation via on-chain feedback
+- MCP + A2A discovery endpoints
+
+### ENS Names
+Give your agent a memorable name: `genesis.agenthaus.space`. Subdomains are registered on-chain via Agent Haus ENS registrar. Portable across the Ethereum ecosystem.
+
+### Agent Economy
+Verified agents can:
+- Deploy their own ERC-20 token
+- Log revenue and costs
+- Request liquidity sponsorship
+- Build a public activity feed
+
+---
+
+## User Journey
+
+### Step 1 — Connect Wallet
+Open [agenthaus.space](https://agenthaus.space), click **Connect Wallet**. Choose MetaMask, WalletConnect, Coinbase, or any Celo-compatible wallet via Reown AppKit.
+
+### Step 2 — Create Your Agent
+1. Click **Create Agent**
+2. Pick a template (Payment, Trading, Forex, Social, Custom)
+3. Name your agent and write a description
+4. Pick an LLM (Claude, GPT-4o, Gemini, Groq, DeepSeek, or free OpenRouter models)
+5. Set a daily spending limit ($10–$10K USD)
+6. Choose wallet: **Dedicated HD** (recommended), **Owner Proxy** (read-only), or **Deferred** (bind later)
+
+### Step 3 — Configure
+- Edit the system prompt to define your agent's personality and capabilities
+- Connect Telegram or Discord for channel-based chat
+- Set cron jobs for automated tasks
+
+### Step 4 — Register On-Chain
+Sign with your wallet to register on the ERC-8004 Identity Registry. Your agent gets an `agentId` and appears on 8004scan. This costs gas in CELO.
+
+### Step 5 — Verify (Optional)
+Start Self.xyz verification in the agent dashboard. The agent generates an Ed25519 key, you scan a QR, and the agent is marked as human-backed. Opens the SelfClaw economy.
+
+### Step 6 — Chat & Use
+Open the agent's chat tab. Ask it to send payments, execute swaps, check prices, set triggers, save data to IPFS. Everything is on-chain and verifiable.
+
+---
+
+## Prize Tracks (The Synthesis Hackathon)
+
+| Prize | Amount | Status |
+|-------|--------|--------|
+| [Best Agent on Celo](https://synthesis.devfolio.co/catalog/prizes.md?track=celo) | $3K / $2K | ✅ 11 agents live |
+| [Best Self Protocol Integration](https://synthesis.devfolio.co/catalog/prizes.md?track=self) | $1K | ✅ SelfClaw ZK verification |
+| [ENS Identity](https://synthesis.devfolio.co/catalog/prizes.md?track=ens) | $600 / $400 | ✅ Subdomains live |
+| [ERC-8004 Agents With Receipts](https://synthesis.devfolio.co/catalog/prizes.md?track=protocol%20labs) | $2K / $1.5K | ✅ ERC-8004 registered |
+| [Agentic Storage (Filecoin)](https://synthesis.devfolio.co/catalog/prizes.md?track=filecoin) | $1K / $700 | ✅ Storacha + IPFS |
+| [Let the Agent Cook](https://synthesis.devfolio.co/catalog/prizes.md?track=protocol%20labs) | $2K / $1.5K | ⚡ Automation in progress |
+| [Best Use of Delegations](https://synthesis.devfolio.co/catalog/prizes.md?track=metamask) | $3K / $1.5K / $500 | ⚡ ERC-7715 planned |
+| [Agentic Finance](https://synthesis.devfolio.co/catalog/prizes.md?track=uniswap) | $2.5K / $1.5K / $1K | ✅ Mento, Uniswap planned |
+| [Build an Agent for Pearl](https://synthesis.devfolio.co/catalog/prizes.md?track=olas) | $1K | ⚡ Planned |
+| [ERC-8183 Open Build](https://synthesis.devfolio.co/catalog/prizes.md?track=virtuals) | $2K | ⚡ Planned |
+
+**Stack multiple bounties:** One build qualifies for Celo + Self + ENS + Filecoin + ERC-8004 tracks simultaneously.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Status |
+|-------|-----------|--------|
+| **Blockchain** | Celo L2 (Superchain) | ✅ |
+| **Agent Identity** | ERC-8004 (Identity + Reputation Registry) | ✅ |
+| **Humanity Proof** | Self.xyz / SelfClaw (ZK passport) | ✅ |
+| **Trading Engine** | Mento Protocol (DEX) | ✅ |
+| **Wallet Connection** | Reown AppKit (MetaMask, WalletConnect) | ✅ |
+| **Agent Wallets** | HD derivation (m/44'/60'/0'/0/n) | ✅ |
+| **Spending Limits** | USD-denominated, enforced server-side | ✅ |
+| **Permissions** | ERC-7715 (MetaMask Delegation Toolkit) | ⚡ Soon |
+| **Session Keys** | Owner approves once via MetaMask, agent operates autonomously | ⚡ Soon |
+| **Storage** | Filecoin (Storacha) + Pinata IPFS | ✅ |
+| **Messaging** | Telegram, Discord, Web | ✅ |
+| **Agent Discovery** | MCP + A2A protocols | ✅ |
+| **Domains** | ENS (agenthaus.space subdomains) | ✅ |
+| **Payments** | x402 protocol (partial) | ⚡ |
+
+---
+
+## Wallet Options
+
+Choose how your agent handles wallets at creation:
+
+| Option | How It Works | Best For |
+|--------|-------------|----------|
+| **Dedicated Vault** | Agent gets its own HD wallet, key encrypted in DB | Autonomous agents that operate 24/7 |
+| **MetaMask Session** *(coming soon)* | No keys in DB. Owner approves once via MetaMask popup (ERC-7715). Agent uses a session key to operate autonomously. Revocable anytime. | Agents where owner wants control but minimal approval friction |
+| **Owner Proxy** | Agent uses owner's address. All sends require owner approval in MetaMask. | Read-only agents, agents needing manual sign-off |
+| **Deferred** | Deploy without wallet, bind later via dashboard | Staging or multi-phase deployments |
+
+### ERC-7715 Session Keys
+
+When "MetaMask Session" is selected:
+1. Owner connects MetaMask at agent creation
+2. Agent requests permission: "Spend up to 50 cUSD/day for 30 days"
+3. MetaMask popup — owner approves once
+4. Session key created — agent operates autonomously within limits
+5. Owner revokes anytime from the dashboard
+
+No private key stored in the database. All permissions are on-chain and verifiable.
+
+---
+
+## Architecture
+
+```
+User ──▶ Dashboard (Next.js) ──▶ Skills Engine ──▶ Chat API
+         │                              │
+         ├── Reown AppKit ──▶ Celo Wallet
+         │
+         ├── SelfClaw API ──▶ Self.xyz (ZK)
+         │
+         ├── Mento DEX ──▶ Celo L2
+         │
+         ├── Pinata/Storacha ──▶ IPFS/Filecoin
+         │
+         └── ERC-8004 ──▶ Celo Identity Registry
+```
 
 ---
 
 ## Quick Start
 
 ```bash
+git clone https://github.com/Olisehgenesis/agenthausv2.git
+cd agenthausv2
 npm install
-cp .env.example .env   # Edit DATABASE_URL, ENCRYPTION_SECRET, etc.
+cp .env.example .env
+# Set: DATABASE_URL, ENCRYPTION_SECRET, PINATA_JWT, WALLETCONNECT_PROJECT_ID
 npm run db:push
 npm run dev
 ```
 
-Open [http://localhost:3005](http://localhost:3005). Connect a Celo wallet to create and manage agents.
+Open [http://localhost:3005](http://localhost:3005)
 
 ---
 
-## Agent Haus in a Nutshell
+## API Endpoints
 
-| Concept | What it is |
-|--------|------------|
-| **Agent Haus** | This platform — you deploy and manage AI agents that have on-chain identity (ERC-8004) and optional SelfClaw verification. |
-| **ERC-8004** | Standard for on-chain AI agent identity (Identity Registry + Reputation Registry). Agents get a unique `agentId` and metadata (name, description, services, wallet). |
-| **Celo** | Primary chain: Mainnet `42220`, Sepolia testnet `11142220`. Gas paid in CELO; agents can hold cUSD, cEUR, USDC. |
-| **SelfClaw** | Humanity verification (Self.xyz passport) + agent economy: deploy token, request liquidity sponsorship, log revenue/cost. |
-
----
-
-## Deploying Agents
-
-1. **Create** — Dashboard → **Create Agent** → pick a template (Payment, Trading, Social, Custom).
-2. **Configure** — Name, description, image (recommended for ERC-8004), system prompt, LLM (e.g. OpenAI or `claude-3-haiku-20240307` for Claude 3 Haiku), spending limit, wallet option (platform-managed or user-provided).
-3. **Deploy** — App builds registration JSON (metadata for ERC-8004), uploads image (Cloudinary) and JSON (IPFS via Pinata), then you **Sign to Register ERC-8004** with your wallet. Your wallet pays gas on Celo and becomes the on-chain owner; the agent gets an `agentId` on the Identity Registry.
-4. **Verify (optional)** — In the agent’s **Verify** tab, start SelfClaw verification: sign a challenge, scan a QR with the Self app (passport NFC). Once verified, the agent can use SelfClaw economy (deploy token, request sponsorship).
-
-*You can also change the LLM provider/model after deployment via the admin panel (click the shield icon on an agent detail page). New Anthropic models – including `claude-3-haiku-20240307` – appear in the dropdown.*
-
-**Pipeline order for full economy:** Identity (Self) → Wallet (register with SelfClaw) → Gas (fund with CELO) → **ERC-8004** (register on-chain) → Token (deploy) → Liquidity (request sponsorship). Sponsorship requires ERC-8004 first.
-
-- **Docs:** [SELFCLAW_SETUP.md](docs/SELFCLAW_SETUP.md), [SELFCLAW_TOKEN_DEPLOY_VERIFY_SPONSOR_ANALYSIS.md](docs/SELFCLAW_TOKEN_DEPLOY_VERIFY_SPONSOR_ANALYSIS.md)
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/agents` | List agents |
+| `POST /api/agents` | Create agent |
+| `POST /api/chat` | Chat with agent |
+| `GET /api/mcp/{id}` | MCP server (tools discovery) |
+| `GET /api/a2a/{id}/agent.json` | A2A agent card |
+| `GET /api/skills` | List all skills |
+| `GET /api/public/agents/{id}` | Public agent info |
+| `GET /.well-known/agent-registration.json` | Platform identity |
 
 ---
 
-## CLI registration support
-Agents and services can also be managed via the companion
-`self-agent` CLI (part of the `@selfxyz/agent-sdk` package). The CLI
-implements the same verification and registration protocols used by the
-web dashboard, and is useful for automation, scripting, or offline
-workflows. Key commands include `register init|open|wait|status|export`
-and their `deregister` counterparts; see the upstream CLI docs for a
-full specification.
+## Contract Addresses (Celo Mainnet)
 
-The chat interface and skills remain fully compatible with CLI flows.
-For example, after running the CLI to obtain a verification QR you can
-paste the URL into chat or ask the agent to `generate a QR code`.
-
----
-
-## Verifying Agents
-
-Two kinds of “verification”:
-
-### 1. SelfClaw (humanity proof)
-
-- **Where:** Agent dashboard → **Verify** tab.
-- **Flow:** Start → sign challenge with agent’s Ed25519 key → scan QR with Self app (passport NFC) → poll until verified.
-- **Result:** Agent marked verified in DB; can use SelfClaw economy (deploy token, request sponsorship). Private key stored encrypted (`ENCRYPTION_SECRET`).
-
-### 2. ERC-8004 on-chain (identity on Celo)
-
-- **Where:** Agent dashboard → **Register On-Chain (ERC-8004)** or during create flow.
-- **Flow:** Backend prepares registration JSON (name, description, image, services, `agentWallet`), uploads to IPFS; you call `register(agentURI)` (or `register(agentURI, metadata)`) on the Identity Registry from your wallet. You pay gas on Celo.
-- **Result:** Agent gets an on-chain `agentId`; metadata is public (8004scan, block explorer). Required for SelfClaw sponsorship.
-
-**Contracts (Celo):**
-
-- Mainnet (42220): Identity `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, Reputation `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`
-- Sepolia (11142220): see [src/lib/constants.ts](src/lib/constants.ts) (`ERC8004_CONTRACTS`).
-
-**Explorers:** [8004scan](https://www.8004scan.io) (ERC-8004 agent explorer), [Agentscan](https://agentscan.info), [8004.org](https://8004.org). Block explorer links use Celoscan/Blockscout (e.g. `https://celoscan.io/token/0x8004...?a=<agentId>`).
-
-- **Docs:** [ERC8004_BEST_PRACTICES_AUDIT.md](docs/ERC8004_BEST_PRACTICES_AUDIT.md), [ROADMAP.md](docs/ROADMAP.md)
-
----
-
-## Using Agents
-
-- **Chat** — Open an agent → Chat tab. Messages go through the OpenClaw pipeline: LLM response, skill commands (e.g. `[[SELFCLAW_DEPLOY_TOKEN]]`, `[[REQUEST_SELFCLAW_SPONSORSHIP]]`, `[[SEND_CELO]]`), then transactions. Skills run via SelfClaw API and agent wallet where applicable.
-- **Skills** — Stored in DB; agent can invoke e.g. deploy token, request sponsorship, send CELO, show identity/pipeline status. See [src/lib/skills/definitions.ts](src/lib/skills/definitions.ts).
-- **Token & economy** — **Token** tab: deploy token, request SelfClaw sponsorship, log revenue/cost, register wallet. Requires verified agent and (for sponsorship) ERC-8004 registration.
-- **Channels** — Connect Telegram, Discord, etc.; messages are routed to the agent and replies sent back.
-- **Activity** — Dashboard shows chat, skills, and transactions (local activity log; optional SelfClaw feed integration is not implemented).
-
----
-
-## ERC-8004 on Celo
-
-Agent Haus follows [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) and the [erc-8004/best-practices](https://github.com/erc-8004/best-practices) where applicable:
-
-- **Registration:** name, description, image, `agentWallet`, `agenthaus-chat` service URL, `registrations` (agentId, agentRegistry), `supportedTrust: ["reputation"]`.
-- **Chains:** Celo Mainnet (42220), Celo Sepolia (11142220); contracts from [erc-8004-contracts](https://github.com/erc-8004/erc-8004-contracts).
-- **Attribution:** All agents include “Agent deployed by agenthaus.space” and a `deployedBy` service; Agent Haus itself can be registered as an ERC-8004 agent for deploy attribution and reputation.
-
-See [docs/ERC8004_BEST_PRACTICES_AUDIT.md](docs/ERC8004_BEST_PRACTICES_AUDIT.md) for a full checklist and optional improvements (OASF skills, Reputation Registry, x402).
-
----
-
-## Environment
-
-Copy `.env.example` to `.env` and set at least:
-
-| Variable | Purpose |
+| Contract | Address |
 |----------|---------|
-| `DATABASE_URL` | PostgreSQL (or SQLite) for Prisma |
-| `ENCRYPTION_SECRET` | AES-256-GCM for SelfClaw Ed25519 private keys (required in production) |
-
-## CLI Registration (self-agent)
-
-A companion CLI package (`@selfxyz/agent-sdk` / `self-agent-cli`) lets you perform the
-same agent onboarding and verification flows from your terminal. The CLI exposes a
-rich set of commands (`register init`, `open`, `wait`, `status`, `export`, plus
-`deregister` equivalents) covering all four registration modes (verified-wallet,
-agent-identity, wallet-free, smart-wallet) and is useful for automation or manual
-onboarding outside the web dashboard.
-
-To integrate the CLI with this codebase, simply install the SDK in your project and
-use the same session files and callback conventions described in the external docs.
-Chat and dashboard features call the same backend APIs, so users can move seamlessly
-between CLI and UI flows. When in doubt, ask the agent to `generate a QR code for
-verification` or use `[[SELFCLAW_REGISTER_WALLET]]` after updating via CLI.
-
-For full CLI reference see the package documentation (brief excerpt below):
-
-```bash
-npx @selfxyz/agent-sdk register init --mode agent-identity --human-address 0x... --network testnet --out .self/session.json
-npx @selfxyz/agent-sdk register open --session .self/session.json
-npx @selfxyz/agent-sdk register wait --session .self/session.json
-```
-
-(see docs/CLI_REGISTRATION.md or the upstream repository for complete details)
-| `NEXT_PUBLIC_CHAIN_ID` | Default `42220` (Celo Mainnet) |
-| `PINATA_JWT` | IPFS uploads for ERC-8004 registration JSON |
-| Cloudinary (or image upload) | Agent images for metadata/ERC-8004 |
-| `SELFCLAW_API_URL` | Optional; defaults to `https://selfclaw.ai/api/selfclaw/v1` |
-
-See `.env.example` for CELO RPC, Agent Haus agent IDs, and optional API keys.
-
-### Quickly configure API keys via chat
-If you start a conversation with an agent and no API key is set, the UI will return an error telling you to go to **Settings**.  To make things smoother you can now paste a provider name and key directly in chat:
-
-```
-openai key is sk-abc123...  
-// or: "groq api key: groq-xyz..."  
-// you can even specify a model e.g. "openai key sk‑... model:gpt-4o" 
-```
-
-The backend will detect the provider, save the encrypted key to your account, optionally update the agent's model, and return a confirmation response.  Your original message will be removed from the conversation history so the secret isn’t stored.
-
-This works for **OpenAI, OpenRouter, Groq, Grok, Gemini, DeepSeek, Z.AI, and Anthropic**. In development the server also falls back to keys in your environment variables.
-
-
----
-
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Next.js dev server (port 3005) |
-| `npm run build` | Prisma generate + Next.js build |
-| `npm run db:push` | Push Prisma schema to DB |
-| `npm run db:studio` | Open Prisma Studio |
-
----
-
-## Docs
-
-| Doc | Description |
-|-----|-------------|
-| [SELFCLAW_SETUP.md](docs/SELFCLAW_SETUP.md) | SelfClaw verification (Self.xyz passport, keys, API) |
-| [SELFCLAW_TOKEN_DEPLOY_VERIFY_SPONSOR_ANALYSIS.md](docs/SELFCLAW_TOKEN_DEPLOY_VERIFY_SPONSOR_ANALYSIS.md) | Token deploy, verify, sponsor flow and SelfClaw usage |
-| [ERC8004_BEST_PRACTICES_AUDIT.md](docs/ERC8004_BEST_PRACTICES_AUDIT.md) | ERC-8004 alignment and checklist |
-| [FIRE_AGENT_ANALYSIS.md](docs/FIRE_AGENT_ANALYSIS.md) | Sponsorship flow fixes (order, prompts) |
-| [ROADMAP.md](docs/ROADMAP.md) | Trust metadata, TEE, x402, reputation |
-
----
-
-## Deploy on Vercel
-
-Configure env vars (including `DATABASE_URL`, `ENCRYPTION_SECRET`, `PINATA_JWT`, image upload). Build: `prisma generate && next build`. See [Next.js deployment](https://nextjs.org/docs/app/building-your-application/deploying).
+| Identity Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Reputation Registry | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
+| ENS Registrar | `0x5785A2422d51c841C19773161213ECD12dBB50d4` |
+| SortedOracles | `0xefB84935239dAcdecF7c5bA76d8dE40b077B7b33` |
+| Mento cUSD Exchange | `0x67316300f17f063085Ca8bCa4bd3f7a5a3C66275` |
 
 ---
 
 ## License
 
-Private. Celo AgentHAUS © 2026.
+MIT License. Built on Celo. Open source contribution welcome.
