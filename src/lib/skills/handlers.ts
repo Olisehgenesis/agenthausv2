@@ -139,6 +139,91 @@ export async function executeMentoSwap(params: string[], ctx: SkillContext): Pro
   }
 }
 
+export async function executeConnectMetaMask(_params: string[], ctx: SkillContext): Promise<SkillResult> {
+  if (!ctx.agentWalletAddress) {
+    const display = [
+      fmtHeader("MetaMask Connection", "🔐"),
+      "",
+      fmtBullet("No wallet currently connected to this agent."),
+      fmtBullet("Run the web UI MetaMask connect flow to grant access."),
+      "",
+      fmtMeta("Use the Agent Dashboard 'Connect Wallet' button to authorize.")
+    ].join("\n");
+    return { success: false, display, error: "No agent wallet connected" };
+  }
+
+  const display = [
+    fmtHeader("MetaMask Connection", "✅"),
+    "",
+    fmtBullet(`Connected agent wallet: ${ctx.agentWalletAddress}`),
+    fmtBullet(`Derivation index: ${ctx.walletDerivationIndex ?? "unknown"}`),
+    "",
+    fmtMeta("Agent is MetaMask-compatible and ready for onchain operations."),
+  ].join("\n");
+
+  return { success: true, data: { address: ctx.agentWalletAddress } as unknown as Record<string, unknown>, display };
+}
+
+export async function executeUniswapQuote(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+  const [sellCurrency, buyCurrency, amount] = params;
+  if (!sellCurrency || !buyCurrency || !amount) {
+    return { success: false, error: "Missing parameters", display: "❌ Usage: [[UNISWAP_QUOTE|sell_currency|buy_currency|amount]]" };
+  }
+
+  const result = await executeMentoQuote([sellCurrency, buyCurrency, amount], _ctx);
+  if (!result.success) {
+    return { success: false, error: result.error, display: `❌ Uniswap-style quote failed: ${result.error}` };
+  }
+
+  const display = [`${result.display}`].join("\n");
+  return { success: true, data: result.data, display };
+}
+
+export async function executeUniswapSwap(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [sellCurrency, buyCurrency, amount] = params;
+  if (!sellCurrency || !buyCurrency || !amount) {
+    return { success: false, error: "Missing parameters", display: "❌ Usage: [[UNISWAP_SWAP|sell_currency|buy_currency|amount]]" };
+  }
+
+  const result = await executeMentoSwap([sellCurrency, buyCurrency, amount], ctx);
+  if (!result.success) {
+    return { success: false, error: result.error, display: `❌ Uniswap-style swap failed: ${result.error}` };
+  }
+
+  const display = [
+    fmtHeader("Uniswap-style Swap", "🦄"),
+    "",
+    fmtBullet("Executed via Celo Mento path simulation."),
+    "",
+    result.display,
+    "",
+    fmtMeta("Use this for Uniswap-compatible intent on Celo.")
+  ].join("\n");
+
+  return { success: true, data: result.data, display };
+}
+
+export async function executeVirtualsACP(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [action] = params;
+  if (!action) {
+    return { success: false, error: "Missing action", display: "❌ Usage: [[VIRTUALS_ACP|action]]" };
+  }
+
+  const agent = ctx.agentId ?? "unknown";
+
+  const display = [
+    fmtHeader("Virtuals ACP Cross-Agent Commerce", "🤖"),
+    "",
+    fmtBullet(`Agent: ${agent}`),
+    fmtBullet(`Action: ${action}`),
+    fmtBullet("Status: Simulation (requires Virtuals network integration)."),
+    "",
+    fmtMeta("In production, this would route through Virtuals ACP with SelfProtocol identity + Filecoin storage path."),
+  ].join("\n");
+
+  return { success: true, data: { action, agent } as unknown as Record<string, unknown>, display };
+}
+
 // ─── Data handlers ───────────────────────────────────────────────────────────
 
 export async function executeCheckBalance(params: string[], ctx: SkillContext): Promise<SkillResult> {
@@ -1538,7 +1623,7 @@ export async function executeCreatePriceTrigger(
         agentId: ctx.agentId,
         userId: (await prisma.agent.findUnique({ where: { id: ctx.agentId }, select: { ownerId: true } }))?.ownerId || "",
         triggerType: "price",
-        tokenSymbol: token,
+        tokenSymbol: token.toUpperCase(),
         conditionType: condition,
         targetValue: parseFloat(target),
         baselinePrice: price,
@@ -1857,5 +1942,293 @@ export function formatPeriodLabel(minutes: number): string {
   if (minutes < 60) return `${minutes} minutes`;
   if (minutes < 1440) return `${Math.round(minutes / 60)} hour(s)`;
   return `${Math.round(minutes / 1440)} day(s)`;
+}
+
+// ─── IPFS Storage handlers ─────────────────────────────────────────────────
+
+export async function executeStoreToIPFS(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [dataStr, filename, keyvaluesStr] = params;
+  
+  if (!dataStr || !filename) {
+    return { 
+      success: false, 
+      error: "Missing parameters", 
+      display: "❌ Usage: [[STORE_TO_IPFS|data_json|filename.json|optional_keyvalues]]" 
+    };
+  }
+
+  const { storeJSON, storeData } = await import("@/lib/storage/ipfs-storage");
+
+  try {
+    let data: Record<string, any>;
+    try {
+      data = JSON.parse(dataStr);
+    } catch {
+      data = { content: dataStr };
+    }
+
+    let keyvalues: Record<string, string> = {};
+    if (keyvaluesStr) {
+      try {
+        keyvalues = JSON.parse(keyvaluesStr);
+      } catch {
+        keyvalues = {};
+      }
+    }
+
+    keyvalues.agentId = ctx.agentId;
+    if (ctx.agentWalletAddress) {
+      keyvalues.owner = ctx.agentWalletAddress;
+    }
+
+    const result = await storeJSON(data, filename, keyvalues);
+
+    const display = [
+      fmtHeader("Stored to IPFS", "📦"),
+      "",
+      fmtBullet(`CID: **${result.cid}**`),
+      fmtBullet(`Size: ${result.size} bytes`),
+      fmtBullet(`Gateway: ${result.url}`),
+      "",
+      fmtMeta("Data is now permanently stored on IPFS"),
+    ].join("\n");
+
+    return { success: true, data: result as unknown as Record<string, unknown>, display };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: String(error), 
+      display: `❌ Failed to store to IPFS: ${error}` 
+    };
+  }
+}
+
+export async function executeStoreToIPFSCAR(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+  const [dataStr, filename] = params;
+
+  if (!dataStr || !filename) {
+    return {
+      success: false,
+      error: "Missing parameters",
+      display: "❌ Usage: [[STORE_TO_IPFS_CAR|data_json|filename]]",
+    };
+  }
+
+  const { packDataToCar, uploadCarToStoracha } = await import("@/lib/storage/ipfs-car");
+
+  try {
+    let data: string | Record<string, unknown>;
+    try {
+      data = JSON.parse(dataStr);
+    } catch {
+      data = dataStr;
+    }
+
+    const carPackage = await packDataToCar(data, filename);
+
+    const uploaded = await uploadCarToStoracha(carPackage.carBlob, `${filename}.car`);
+
+    const display = [
+      fmtHeader("Stored CAR to Storacha", "📦"),
+      "",
+      fmtBullet(`CAR CID: **${uploaded.cid}**`),
+      fmtBullet(`CAR root CID: **${carPackage.rootCid}**`),
+      fmtBullet(`Size: ${uploaded.size} bytes`),
+      fmtBullet(`CAR URL: ${uploaded.url}`),
+      fmtBullet(`Root URL: ${uploaded.rootUrl}`),
+      "",
+      fmtMeta("Packed data to CAR and uploaded to Storacha"),
+    ].join("\n");
+
+    return {
+      success: true,
+      data: {
+        carCid: uploaded.cid,
+        rootCid: carPackage.rootCid,
+        carUrl: uploaded.url,
+        rootUrl: uploaded.rootUrl,
+        size: uploaded.size,
+      } as unknown as Record<string, unknown>,
+      display,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: String(error),
+      display: `❌ Failed to store CAR to Storacha: ${error}`,
+    };
+  }
+}
+
+export async function executeRetrieveFromIPFSCAR(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+  const [cid] = params;
+
+  if (!cid) {
+    return {
+      success: false,
+      error: "Missing CID",
+      display: "❌ Usage: [[RETRIEVE_FROM_IPFS_CAR|cid]]",
+    };
+  }
+
+  const { retrieveCarFromCid } = await import("@/lib/storage/ipfs-car");
+
+  try {
+    const result = await retrieveCarFromCid(cid);
+
+    const display = [
+      fmtHeader("Retrieved CAR from IPFS", "📥"),
+      "",
+      fmtBullet(`CID: **${cid}**`),
+      fmtBullet(`Archive URL: ${result.carUrl}`),
+      fmtBullet(`Roots: ${result.roots.join(", ")}`),
+      "",
+      ...result.files.slice(0, 5).map((f) => fmtBullet(`${f.path} (${f.size} bytes)`)),
+      "",
+      fmtMeta("CAR archive retrieved and inspected (file list)."),
+    ].join("\n");
+
+    return {
+      success: true,
+      data: {
+        cid: result.cid,
+        roots: result.roots,
+        files: result.files,
+      } as unknown as Record<string, unknown>,
+      display,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: String(error),
+      display: `❌ Failed to retrieve CAR from IPFS: ${error}`,
+    };
+  }
+}
+
+export async function executeRetrieveFromIPFS(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+  const [cid] = params;
+
+  if (!cid) {
+    return { 
+      success: false, 
+      error: "Missing CID", 
+      display: "❌ Usage: [[RETRIEVE_FROM_IPFS|cid]]" 
+    };
+  }
+
+  const { retrieveJSON, retrieveData } = await import("@/lib/storage/ipfs-storage");
+
+  try {
+    let data: any;
+    try {
+      data = await retrieveJSON(cid);
+    } catch {
+      const rawData = await retrieveData(cid);
+      try {
+        data = JSON.parse(rawData);
+      } catch {
+        data = rawData;
+      }
+    }
+
+    const display = [
+      fmtHeader("Retrieved from IPFS", "📥"),
+      "",
+      fmtBullet(`CID: **${cid}**`),
+      fmtCode(JSON.stringify(data, null, 2)),
+      "",
+      fmtMeta("Data retrieved successfully"),
+    ].join("\n");
+
+    return { success: true, data: data as unknown as Record<string, unknown>, display };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: String(error), 
+      display: `❌ Failed to retrieve from IPFS: ${error}` 
+    };
+  }
+}
+
+export async function executeStoreAgentData(params: string[], ctx: SkillContext): Promise<SkillResult> {
+  const [userDataStr, dataType] = params;
+
+  if (!userDataStr || !dataType) {
+    return { 
+      success: false, 
+      error: "Missing parameters", 
+      display: "❌ Usage: [[STORE_AGENT_DATA|userData|dataType]]" 
+    };
+  }
+
+  const { storeAgentUserData } = await import("@/lib/storage/ipfs-storage");
+
+  try {
+    let userData: Record<string, any>;
+    try {
+      userData = JSON.parse(userDataStr);
+    } catch {
+      userData = { content: userDataStr };
+    }
+
+    const result = await storeAgentUserData(
+      ctx.agentId,
+      ctx.agentWalletAddress || "unknown",
+      userData,
+      dataType
+    );
+
+    const display = [
+      fmtHeader("Agent Data Stored", "📦"),
+      "",
+      fmtBullet(`CID: **${result.cid}**`),
+      fmtBullet(`Type: ${dataType}`),
+      fmtBullet(`Agent: ${ctx.agentId}`),
+      fmtBullet(`Gateway: ${result.url}`),
+      "",
+      fmtCode(`Package timestamp: ${new Date(result.package.timestamp).toISOString()}`),
+      "",
+      fmtMeta("Agent data package stored with metadata"),
+    ].join("\n");
+
+    return { success: true, data: result as unknown as Record<string, unknown>, display };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: String(error), 
+      display: `❌ Failed to store agent data: ${error}` 
+    };
+  }
+}
+
+export async function executeGetStorageLinks(params: string[], _ctx: SkillContext): Promise<SkillResult> {
+  const [cid] = params;
+
+  if (!cid) {
+    return { 
+      success: false, 
+      error: "Missing CID", 
+      display: "❌ Usage: [[GET_STORAGE_LINKS|cid]]" 
+    };
+  }
+
+  const { getIPFSGatewayUrls } = await import("@/lib/storage/ipfs-storage");
+
+  const gateways = getIPFSGatewayUrls(cid);
+  
+  const display = [
+    fmtHeader("IPFS Gateway URLs", "🔗"),
+    "",
+    ...gateways.map(g => fmtBullet(g)),
+    "",
+    fmtMeta("Use any gateway to retrieve your data"),
+  ].join("\n");
+
+  return { 
+    success: true, 
+    data: { cid, gateways } as unknown as Record<string, unknown>, 
+    display 
+  };
 }
 
