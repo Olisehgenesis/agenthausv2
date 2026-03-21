@@ -17,6 +17,7 @@
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/openai": "^3.0.41",
     "@hookform/resolvers": "^5.2.2",
+    "@ipld/car": "^5.4.2",
     "@langchain/core": "^1.1.30",
     "@metamask/delegation-toolkit": "^0.13.0",
     "@noble/ed25519": "^3.0.0",
