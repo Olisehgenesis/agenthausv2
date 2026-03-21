@@ -92,6 +92,9 @@ importers:
       ipfs-car:
         specifier: ^3.1.0
         version: 3.1.0
+      ipfs-unixfs-exporter:
+        specifier: ^15.0.3
+        version: 15.0.3
       langchain:
         specifier: ^1.2.29
         version: 1.2.29(@langchain/core@1.1.30(@opentelemetry/api@1.9.0))(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod-to-json-schema@3.25.1(zod@4.3.6))
@@ -4065,8 +4068,14 @@ packages:
   interface-blockstore@5.3.2:
     resolution: {integrity: sha512-oA9Pjkxun/JHAsZrYEyKX+EoPjLciTzidE7wipLc/3YoHDjzsnXRJzAzFJXNUvogtY4g7hIwxArx8+WKJs2RIg==}
 
+  interface-blockstore@6.0.1:
+    resolution: {integrity: sha512-AVcUbMwrhiO4RqDljUitUt3aoon6MD2fblsN7vEVBDsmHFQT0LIOODVK5Qxe28h1uUvVykyZqmo09f6w55KiJg==}
+
   interface-store@6.0.3:
     resolution: {integrity: sha512-+WvfEZnFUhRwFxgz+QCQi7UC6o9AM0EHM9bpIe2Nhqb100NHCsTvNAn4eJgvgV2/tmLo1MP9nGxQKEcZTAueLA==}
+
+  interface-store@7.0.1:
+    resolution: {integrity: sha512-OPRRUO3Cs6Jr/t98BrJLQp1jUTPgrRH0PqFfuNoPAqd+J7ABN1tjFVjQdaOBiybYJTS/AyBSZnZVWLPvp3dW3w==}
 
   internal-slot@1.1.0:
     resolution: {integrity: sha512-4gd7VpWNQNB4UKKCFFVcp1AVv+FMOgs9NKzjHKusc8jTMhd5eL1NqQqOpE0KzMds804/yHlglp3uxgluOqAPLw==}
@@ -4084,8 +4093,14 @@ packages:
   ipfs-unixfs-exporter@13.7.3:
     resolution: {integrity: sha512-sTFjAEnsPu5irh9rvT1j5mNf7nXnW78x5SJrCIrNZb1UqkXQtNX81RjAnTBShUtZ5ujSOc/yrC9Az8il8NVkKQ==}
 
+  ipfs-unixfs-exporter@15.0.3:
+    resolution: {integrity: sha512-YUj5UHUIjbUNnsfYx5B3nHl7KmLcRZwQpCZLGgvn0SKfWZSHoUX2ZGy5QGSYwf+Yd5cXGoqKImUMADvh0CIfGA==}
+
   ipfs-unixfs@11.2.5:
     resolution: {integrity: sha512-uasYJ0GLPbViaTFsOLnL9YPjX5VmhnqtWRriogAHOe4ApmIi9VAOFBzgDHsUW2ub4pEa/EysbtWk126g2vkU/g==}
+
+  ipfs-unixfs@12.0.1:
+    resolution: {integrity: sha512-V8o80MEq3Aehs9KSX9k/FpRmsyYrLAH6mrq7Tq13vQi8TA3onzif8z5sDsWg8AAV9aa+uuvr0HHVLtnb5rNL3A==}
 
   ipfs-utils@9.0.14:
     resolution: {integrity: sha512-zIaiEGX18QATxgaS0/EOQNoo33W0islREABAcxXE8n7y2MGAlB+hdsxXn4J0hGZge8IqVQhW8sWIb+oJz2yEvg==}
@@ -4310,6 +4325,9 @@ packages:
 
   it-stream-types@2.0.2:
     resolution: {integrity: sha512-Rz/DEZ6Byn/r9+/SBCuJhpPATDF9D+dz5pbgSUyBsCDtza6wtNATrz/jz1gDyNanC3XdLboriHnOC925bZRBww==}
+
+  it-to-buffer@4.0.10:
+    resolution: {integrity: sha512-dXNHSILSPVv+31nxav+egNxWA/RpSuAHCSurJCLxkFDpmzAyYPJwIkPfLkYiHLoJqyE6Z5nVFILp6aDvz9V5pw==}
 
   it-to-stream@1.0.0:
     resolution: {integrity: sha512-pLULMZMAB/+vbdvbZtebC0nWBTbG581lk6w8P7DfIIIKUfa8FbY7Oi0FxZcFPbxvISs7A9E+cMpLDBc1XhpAOA==}
@@ -12618,7 +12636,14 @@ snapshots:
       interface-store: 6.0.3
       multiformats: 13.4.2
 
+  interface-blockstore@6.0.1:
+    dependencies:
+      interface-store: 7.0.1
+      multiformats: 13.4.2
+
   interface-store@6.0.3: {}
+
+  interface-store@7.0.1: {}
 
   internal-slot@1.1.0:
     dependencies:
@@ -12661,7 +12686,31 @@ snapshots:
       p-queue: 8.1.1
       progress-events: 1.0.1
 
+  ipfs-unixfs-exporter@15.0.3:
+    dependencies:
+      '@ipld/dag-cbor': 9.2.5
+      '@ipld/dag-json': 10.2.6
+      '@ipld/dag-pb': 4.1.5
+      '@multiformats/murmur3': 2.2.2
+      hamt-sharding: 3.0.6
+      interface-blockstore: 6.0.1
+      ipfs-unixfs: 12.0.1
+      it-last: 3.0.9
+      it-map: 3.1.4
+      it-parallel: 3.0.13
+      it-pipe: 3.0.1
+      it-pushable: 3.2.3
+      it-to-buffer: 4.0.10
+      multiformats: 13.4.2
+      p-queue: 9.1.0
+      progress-events: 1.0.1
+
   ipfs-unixfs@11.2.5:
+    dependencies:
+      protons-runtime: 5.6.0
+      uint8arraylist: 2.4.8
+
+  ipfs-unixfs@12.0.1:
     dependencies:
       protons-runtime: 5.6.0
       uint8arraylist: 2.4.8
@@ -12899,6 +12948,10 @@ snapshots:
       race-signal: 2.0.0
 
   it-stream-types@2.0.2: {}
+
+  it-to-buffer@4.0.10:
+    dependencies:
+      uint8arrays: 5.1.0
 
   it-to-stream@1.0.0:
     dependencies:

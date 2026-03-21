@@ -153,9 +153,8 @@ export default function EnsBuyPage() {
   const [txError, setTxError] = React.useState<string | null>(null);
   const [showBuyModal, setShowBuyModal] = React.useState(false);
   const [view, setView] = React.useState<View>("buy");
-  const [paymentMethod, setPaymentMethod] = React.useState<"x402" | "onchain">(
-    (searchParams.get("method") as any) === "x402" ? "x402" : "onchain"
-  );
+  const isX402 = (searchParams.get("method") as string) === "x402" || (searchParams.get("method") as string) === "x402-enabled";
+  const [paymentMethod, setPaymentMethod] = React.useState<"onchain">("onchain");
 
   const { data: selectedTokenBalance } = useBalance({
     address,
@@ -198,12 +197,6 @@ export default function EnsBuyPage() {
   React.useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
-
-  React.useEffect(() => {
-    if (!isOnchainCeloSupported && paymentMethod === "onchain") {
-      setPaymentMethod("x402");
-    }
-  }, [isOnchainCeloSupported, paymentMethod]);
 
   React.useEffect(() => {
     if (!publicClient || !isOnchainCeloSupported) {
@@ -415,10 +408,12 @@ export default function EnsBuyPage() {
           templateType: "custom",
         }),
       });
+
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.message || "Import failed");
       }
+
       toast.success(`Agent "${importName}" imported!`);
       setImportName("");
       setImportWallet("");
@@ -427,8 +422,9 @@ export default function EnsBuyPage() {
       setImportMetadata(null);
       setView("buy");
       fetchAgents();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to import agent");
+    } catch (err) {
+      const message = (err as any)?.message || "Failed to import agent";
+      toast.error(message);
     } finally {
       setImporting(false);
     }
@@ -498,155 +494,121 @@ export default function EnsBuyPage() {
         throw new Error("Name is already registered on-chain by another owner.");
       };
 
-      if (paymentMethod === "x402") {
-        // x402 Gasless Flow
-        const { X402Client } = await import("uvd-x402-sdk");
-        const x402 = new X402Client({ defaultChain: "celo" });
-        await x402.connect("celo");
+      if (!isOnchainCeloSupported) {
+        throw new Error("On-chain ENS payment is supported on Celo Mainnet only.");
+      }
 
-        const payment = await x402.createPayment({
-          recipient: "0x9b6A52A88a1Ee029Bd14170fFb8fB15839Bd18cB",
-          amount: currentPrice,
+      const alreadyHandled = await runOnchainPreflight();
+      if (alreadyHandled) {
+        return;
+      }
+
+      if (!paymentToken) {
+        throw new Error("No payment token available");
+      }
+
+      const feeRaw = (await publicClient.readContract({
+        address: REGISTRAR_ADDRESS as Address,
+        abi: registrarAbi,
+        functionName: "getRegistrationFee",
+        args: [subdomain.toLowerCase().trim(), paymentToken.address as Address],
+      })) as bigint;
+
+      if (feeRaw <= BigInt(0)) {
+        throw new Error(`${paymentToken.symbol} is not enabled in registrar`);
+      }
+
+      const allowance = (await publicClient.readContract({
+        address: paymentToken.address as Address,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [address, REGISTRAR_ADDRESS as Address],
+      })) as bigint;
+
+      if (allowance < feeRaw) {
+        const approveData = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [REGISTRAR_ADDRESS as Address, feeRaw],
         });
 
-        const res = await fetch("/api/ens/buy-x402", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "X-Payment": payment.paymentHeader
-          },
-          body: JSON.stringify({
-            agentId: selectedAgent.id,
-            name: subdomain,
-          }),
+        const approveRequest = await prepareCeloTransaction(address, {
+          to: paymentToken.address as Address,
+          data: approveData,
         });
 
-        if (res.ok) {
-          toast.success(`Registered ${subdomain}.agenthaus.eth via x402!`);
-          router.push(`/dashboard/agents/${selectedAgent.id}`);
-        } else {
-          const error = await res.json();
-          throw new Error(error.error || "x402 Registration failed");
-        }
-      } else {
-        if (!isOnchainCeloSupported) {
-          throw new Error("On-chain ENS payment is supported on Celo Mainnet only.");
-        }
+        toast.info(`Approving ${paymentToken.symbol} for registrar...`);
+        const approveHash = await sendTransactionAsync(approveRequest as any);
+        const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash as Hash });
 
-        const alreadyHandled = await runOnchainPreflight();
-        if (alreadyHandled) {
+        if (approveReceipt.status !== "success") {
+          throw new Error("Token approval failed");
+        }
+      }
+
+      const txData = encodeFunctionData({
+        abi: registrarAbi,
+        functionName: "registerSubdomain",
+        args: [
+          subdomain.toLowerCase().trim(),
+          selectedAgent.agentWalletAddress as Address,
+          paymentToken.address as Address,
+          feeRaw,
+        ],
+      });
+
+      const txRequest = await prepareCeloTransaction(address, {
+        to: REGISTRAR_ADDRESS,
+        data: txData,
+      });
+
+      const hash = await sendTransactionAsync(txRequest as any);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as Hash });
+
+      if (receipt.status !== "success") {
+        const recovered = await tryReconcileRegistration();
+        if (recovered) {
           return;
         }
+        throw new Error("Registration transaction failed on-chain");
+      }
 
-        if (!paymentToken) {
-          throw new Error("No payment token available");
-        }
+      const payload = {
+        agentId: selectedAgent.id,
+        subdomain,
+        txHash: hash,
+        ownerAddress: address,
+      };
 
-        // On-chain flow: ensure selected token approval, then call registrar.
-        const feeRaw = (await publicClient.readContract({
-          address: REGISTRAR_ADDRESS as Address,
-          abi: registrarAbi,
-          functionName: "getRegistrationFee",
-          args: [subdomain.toLowerCase().trim(), paymentToken.address as Address],
-        })) as bigint;
+      let res = await fetch("/api/ens/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-        if (feeRaw <= BigInt(0)) {
-          throw new Error(`${paymentToken.symbol} is not enabled in registrar`);
-        }
-
-        const allowance = (await publicClient.readContract({
-          address: paymentToken.address as Address,
-          abi: erc20Abi,
-          functionName: "allowance",
-          args: [address, REGISTRAR_ADDRESS as Address],
-        })) as bigint;
-
-        if (allowance < feeRaw) {
-          const approveData = encodeFunctionData({
-            abi: erc20Abi,
-            functionName: "approve",
-            args: [REGISTRAR_ADDRESS as Address, feeRaw],
-          });
-
-          const approveRequest = await prepareCeloTransaction(address, {
-            to: paymentToken.address as Address,
-            data: approveData,
-          });
-
-          toast.info(`Approving ${paymentToken.symbol} for registrar...`);
-          const approveHash = await sendTransactionAsync(approveRequest as any);
-          const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash as Hash });
-
-          if (approveReceipt.status !== "success") {
-            throw new Error("Token approval failed");
-          }
-        }
-
-        const txData = encodeFunctionData({
-          abi: registrarAbi,
-          functionName: "registerSubdomain",
-          args: [
-            subdomain.toLowerCase().trim(),
-            selectedAgent.agentWalletAddress as Address,
-            paymentToken.address as Address,
-            feeRaw,
-          ],
-        });
-
-        const txRequest = await prepareCeloTransaction(address, {
-          to: REGISTRAR_ADDRESS,
-          data: txData,
-        });
-
-        const hash = await sendTransactionAsync(txRequest as any);
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as Hash });
-
-        if (receipt.status !== "success") {
-          const recovered = await tryReconcileRegistration();
-          if (recovered) {
-            return;
-          }
-          throw new Error("Registration transaction failed on-chain");
-        }
-
-        const payload = {
-          agentId: selectedAgent.id,
-          subdomain,
-          txHash: hash,
-          ownerAddress: address,
-        };
-
-        let res = await fetch("/api/ens/register", {
+      if (!res.ok) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        res = await fetch("/api/ens/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-
-        // If backend had a transient issue (e.g. DB reconnect), retry once.
-        if (!res.ok) {
-          await new Promise((resolve) => setTimeout(resolve, 1200));
-          res = await fetch("/api/ens/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-        }
-
-        if (res.ok) {
-          toast.success(`Registered ${subdomain}.agenthaus.eth!`);
-          router.push(`/dashboard/agents/${selectedAgent.id}`);
-        } else {
-          const recovered = await tryReconcileRegistration();
-          if (recovered) {
-            return;
-          }
-
-          const error = await res.json();
-          toast.error(error.message || `Payment confirmed on-chain (tx: ${hash.slice(0, 10)}...), but backend sync failed. Please retry.`);
-        }
       }
-    } catch (err: any) {
-      const message = err?.shortMessage || err?.message || "An error occurred";
+
+      if (res.ok) {
+        toast.success(`Registered ${subdomain}.agenthaus.eth!`);
+        router.push(`/dashboard/agents/${selectedAgent.id}`);
+      } else {
+        const recovered = await tryReconcileRegistration();
+        if (recovered) {
+          return;
+        }
+
+        const error = await res.json();
+        toast.error(error.message || `Payment confirmed on-chain (tx: ${hash.slice(0, 10)}...), but backend sync failed. Please retry.`);
+      }
+    } catch (err) {
+      const message = (err as any)?.shortMessage || (err as any)?.message || "An error occurred";
       setTxError(message);
       toast.error(message);
     } finally {
@@ -655,6 +617,30 @@ export default function EnsBuyPage() {
   };
 
   // ── Not connected ────────────────────────────────────────
+  if (!isConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white border-4 border-forest shadow-hard">
+        <Wallet className="w-20 h-20 text-forest mb-6" />
+        <h2 className="text-4xl font-black uppercase tracking-tighter text-forest mb-4">Connect Wallet</h2>
+        <p className="text-forest font-medium max-w-sm mb-8">
+          Connect your wallet to buy a haus name for your agent.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Loading ───────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-12 h-12 text-forest animate-spin" />
+        <span className="mt-4 font-bold uppercase tracking-widest">Loading...</span>
+      </div>
+    );
+  }
+
+  // ── No agents: empty state ────────────────────────────────
+
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white border-4 border-forest shadow-hard">
@@ -919,8 +905,7 @@ export default function EnsBuyPage() {
     );
   }
 
-  const isX402 = searchParams.get("method") === "x402";
-  const uiPrice = paymentMethod === "onchain" ? (onChainFee ?? currentPrice) : currentPrice;
+  const uiPrice = (onChainFee ?? currentPrice);
   const numericUiPrice = Number(uiPrice || "0");
   const ownedEnsAgents = agents.filter((a) => !!a.ensSubdomain);
 
@@ -1023,10 +1008,12 @@ export default function EnsBuyPage() {
           <div className="p-6 space-y-6">
             <div>
               <h2 className="text-2xl font-black uppercase tracking-tighter text-forest">
-                Buy Haus Name {isX402 && <span className="text-xs bg-forest text-white px-2 py-0.5 ml-2">x402 Gasless</span>}
+                Buy Haus Name {isX402 && <span className="text-xs bg-forest text-white px-2 py-0.5 ml-2">x402 Enabled</span>}
               </h2>
               <p className="text-xs font-bold uppercase text-forest/60 mt-1">
-                {isX402 ? "Secure a haus name without paying gas fees." : "Secure a human-readable ENS subdomain for your agent on Celo."}
+                {isX402
+                  ? "x402 is available via agent post/API; this dashboard flow uses on-chain Celo registration."
+                  : "Secure a human-readable ENS subdomain for your agent on Celo."}
               </p>
             </div>
 
@@ -1076,30 +1063,8 @@ export default function EnsBuyPage() {
                 Payment Method & Pricing
               </label>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setPaymentMethod("onchain")}
-                  disabled={!isOnchainCeloSupported}
-                  className={`p-4 border-2 flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "onchain"
-                      ? "border-forest bg-forest text-white shadow-hard"
-                      : "border-forest/20 bg-white text-forest/40 hover:border-forest/40"
-                  }`}
-                >
-                  <Wallet className="w-5 h-5" />
-                  <span className="text-[10px] font-black uppercase">On-chain (Celo)</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("x402")}
-                  className={`p-4 border-2 flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "x402"
-                      ? "border-forest bg-forest text-white shadow-hard"
-                      : "border-forest/20 bg-white text-forest/40 hover:border-forest/40"
-                  }`}
-                >
-                  <Bot className="w-5 h-5" />
-                  <span className="text-[10px] font-black uppercase">x402 Gasless</span>
-                </button>
+              <div className="p-4 border-2 border-forest bg-forest/5 text-[10px] font-bold text-forest">
+                This page is for on-chain ENS registration. x402 is supported via agent posts/API only and is not selectable here.
               </div>
 
               {paymentMethod === "onchain" && (

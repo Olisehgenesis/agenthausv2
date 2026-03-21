@@ -272,11 +272,11 @@ export default function HomePage() {
 
               {/* Card 2: Pricing & x402 */}
               <div className="p-6 border-2 border-forest bg-celo-yellow neobrutal-shadow flex flex-col h-full ring-4 ring-accent/10">
-                <div className="text-xs font-bold uppercase tracking-widest text-forest/40 mb-4">Micropayments (x402)</div>
+                <div className="text-xs font-bold uppercase tracking-widest text-forest/40 mb-4">Micropayments (x402-enabled)</div>
                 <div className="flex-1 flex flex-col justify-center items-center py-8">
                   <div className="text-4xl font-sans text-forest mb-2">$0.30</div>
                   <div className="text-[10px] font-black uppercase bg-forest text-white px-2 py-0.5 mb-4">Gasless Setup</div>
-                  <p className="text-center text-xs font-bold uppercase text-forest/80 px-4 leading-tight">Pay with stablecoins via x402. No gas needed. Instant registration.</p>
+                  <p className="text-center text-xs font-bold uppercase text-forest/80 px-4 leading-tight">Pay with stablecoins via x402 posts/API only (onchain direct via dashboard). No gas on x402 path.</p>
                 </div>
                 <div className="text-[10px] font-bold uppercase text-forest/40 text-center italic mt-2">Formerly $1.00</div>
               </div>
@@ -297,10 +297,10 @@ export default function HomePage() {
             </div>
 
             <div className="mt-12 text-center">
-              <Link href="/dashboard/ens/buy?method=x402">
+              <Link href="/dashboard/ens/buy?method=x402-enabled">
                 <Button size="lg" className="h-14 px-10 bg-forest text-white border-2 border-forest rounded-none font-bold uppercase tracking-widest text-sm neobrutal-shadow hover:bg-forest/90 transition-all flex items-center gap-3 mx-auto">
                   <Zap className="w-5 h-5 fill-celo-yellow text-celo-yellow" />
-                  Claim your Haus Name (x402)
+                  Claim your Haus Name (x402-enabled)
                 </Button>
               </Link>
               <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-forest/40">
