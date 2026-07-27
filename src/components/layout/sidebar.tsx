@@ -34,7 +34,7 @@ const primaryNavItems = [
 ];
 
 const secondaryNavItems = [
-  { name: "Create Agent", href: "/dashboard/agents/new", icon: Plus },
+  { name: "Create Agent", href: "/dashboard/agents/create", icon: Plus },
 ];
 
 export function Sidebar() {
@@ -204,7 +204,12 @@ export function Sidebar() {
             )}
           >
             {secondaryNavItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive =
+                pathname === item.href ||
+                (item.href === "/dashboard/agents/create" &&
+                  (pathname === "/dashboard/agents/new" ||
+                    pathname.startsWith("/dashboard/agents/create") ||
+                    pathname.startsWith("/dashboard/agents/gamearena")));
               const Icon = item.icon;
 
               return (

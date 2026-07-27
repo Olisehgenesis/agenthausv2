@@ -273,7 +273,7 @@ export default function VerifyPage() {
               <p className="text-sm text-forest-muted/70 mb-4">
                 No agents yet. Create an agent first to verify it.
               </p>
-              <Link href="/dashboard/agents/new">
+              <Link href="/dashboard/agents/create">
                 <Button variant="glow" size="sm">
                   Create Agent
                 </Button>

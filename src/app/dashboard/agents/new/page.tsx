@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { type Address } from "viem";
@@ -261,9 +262,12 @@ export default function NewAgentPage() {
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="max-w-xl mx-auto space-y-8 py-12">
-      <button onClick={() => router.back()} className="text-sm text-forest hover:underline">
+      <Link
+        href="/dashboard/agents/create"
+        className="text-sm text-forest hover:underline"
+      >
         ← Back
-      </button>
+      </Link>
       <h1 className="text-4xl font-bold text-center">Create New Agent</h1>
 
       {deployStatus === "done" && createdAgentId ? (

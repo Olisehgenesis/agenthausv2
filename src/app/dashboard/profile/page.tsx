@@ -107,7 +107,7 @@ export default function ProfilePage() {
             <p className="text-xs text-forest-muted">Your agents</p>
           </div>
         </div>
-        <Link href="/dashboard/agents/new">
+        <Link href="/dashboard/agents/create">
           <Button variant="glow" size="sm" className="rounded-lg">
             <Plus className="w-4 h-4" />
             New
@@ -125,7 +125,7 @@ export default function ProfilePage() {
             <p className="text-sm text-forest-muted max-w-xs mb-6">
               Create your first AI agent to get started on Celo.
             </p>
-            <Link href="/dashboard/agents/new">
+            <Link href="/dashboard/agents/create">
               <Button variant="glow" className="rounded-lg">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Agent

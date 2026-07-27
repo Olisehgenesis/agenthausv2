@@ -127,7 +127,7 @@ export default function DashboardPage() {
             </span>
           </div>
         </div>
-        <Link href="/dashboard/agents/new">
+        <Link href="/dashboard/agents/create">
           <Button size="lg" className="text-xl px-12 h-16">
             <Plus className="w-6 h-6 stroke-[3px]" />
             Create Agent

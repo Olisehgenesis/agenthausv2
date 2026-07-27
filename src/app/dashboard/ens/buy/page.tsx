@@ -698,7 +698,7 @@ export default function EnsBuyPage() {
                   A haus name is tied to an agent wallet. Create a new agent or import an existing one to continue.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link href="/dashboard/agents/new">
+                  <Link href="/dashboard/agents/create">
                     <Button size="lg" className="w-full sm:w-auto h-14 px-8 text-base">
                       <Plus className="w-5 h-5 mr-2" />
                       Create Agent
