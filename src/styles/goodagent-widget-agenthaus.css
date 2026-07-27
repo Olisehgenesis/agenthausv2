@@ -1,0 +1,308 @@
+/**
+ * Agent Haus theme overrides for embedded @goodagent/widget.
+ * Scoped under .goodagent-embed — does not affect GoodAgent elsewhere.
+ */
+
+.goodagent-embed {
+  --ah-gypsum: #f5f3f0;
+  --ah-white: #ffffff;
+  --ah-forest: #141414;
+  --ah-forest-muted: #4a4a4a;
+  --ah-forest-faint: #e5e5e5;
+  --ah-celo: #fcff52;
+  --ah-celo-hover: #f0f34a;
+  --ah-purple: #4e44ce;
+  --ah-error: #dc2626;
+  --ah-ok: #166534;
+  --ah-warn: #854d0e;
+}
+
+.goodagent-embed .ga-widget {
+  --ga-bg: var(--ah-white);
+  --ga-surface: var(--ah-gypsum);
+  --ga-border: var(--ah-forest);
+  --ga-text: var(--ah-forest);
+  --ga-muted: var(--ah-forest-muted);
+  --ga-primary: var(--ah-celo);
+  --ga-primary-hover: var(--ah-celo-hover);
+  --ga-warn: var(--ah-warn);
+  --ga-error: var(--ah-error);
+  --ga-ok: var(--ah-ok);
+
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 13px;
+}
+
+/* Tabs — neobrutal segment control */
+.goodagent-embed .ga-widget-tabs {
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 0;
+  border-bottom: none;
+  flex-wrap: wrap;
+}
+
+.goodagent-embed .ga-widget-tab {
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+  background: var(--ah-gypsum);
+  color: var(--ah-forest);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 16px;
+  box-shadow: 3px 3px 0 0 var(--ah-forest);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.goodagent-embed .ga-widget-tab:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 0 var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-tab-active {
+  background: var(--ah-celo);
+  color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-tab-attention {
+  outline: 2px solid var(--ah-purple);
+  outline-offset: 2px;
+}
+
+/* Typography */
+.goodagent-embed .ga-widget-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.goodagent-embed .ga-widget-muted {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Fields & inputs */
+.goodagent-embed .ga-widget-field span,
+.goodagent-embed .ga-widget-config-grid .ga-widget-field span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ah-forest-muted);
+}
+
+.goodagent-embed .ga-widget-input,
+.goodagent-embed .ga-widget-select {
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+  background: var(--ah-white);
+  color: var(--ah-forest);
+  padding: 10px 12px;
+  box-shadow: inset 0 0 0 0 transparent;
+}
+
+.goodagent-embed .ga-widget-input:focus,
+.goodagent-embed .ga-widget-select:focus {
+  outline: none;
+  box-shadow: 3px 3px 0 0 var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-config-grid {
+  gap: 16px 20px;
+}
+
+/* Buttons */
+.goodagent-embed .ga-widget-btn {
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+  background: var(--ah-white);
+  color: var(--ah-forest);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding: 10px 16px;
+  box-shadow: 3px 3px 0 0 var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-btn:hover:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 0 var(--ah-forest);
+  border-color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-btn-primary {
+  background: var(--ah-celo);
+  color: var(--ah-forest);
+  border-color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-btn-primary:hover:not(:disabled) {
+  background: var(--ah-celo-hover);
+}
+
+.goodagent-embed .ga-widget-btn-active {
+  background: var(--ah-forest-faint);
+}
+
+/* Stats & dashboard deck */
+.goodagent-embed .ga-widget-stat,
+.goodagent-embed .ga-widget-dash-command,
+.goodagent-embed .ga-widget-settings-panel,
+.goodagent-embed .ga-widget-settings-drawer,
+.goodagent-embed .ga-widget-deploy-row,
+.goodagent-embed .ga-widget-vouch-step {
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+  background: var(--ah-white);
+  box-shadow: 3px 3px 0 0 var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-stat {
+  background: var(--ah-gypsum);
+}
+
+.goodagent-embed .ga-widget-deploy-row-active {
+  background: rgba(252, 255, 82, 0.35);
+  border-color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-dash-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.goodagent-embed .ga-widget-status-pill {
+  border: 2px solid var(--ah-forest);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.goodagent-embed .ga-widget-status-pill-live {
+  background: var(--ah-celo);
+  color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-status-pill-idle,
+.goodagent-embed .ga-widget-status-pill-stopped {
+  background: var(--ah-gypsum);
+  color: var(--ah-forest-muted);
+}
+
+.goodagent-embed .ga-widget-online-dot-on {
+  background: var(--ah-ok);
+  box-shadow: 0 0 0 2px var(--ah-white), 0 0 0 4px var(--ah-forest);
+}
+
+/* Match table */
+.goodagent-embed .ga-widget-match-table-wrap {
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+}
+
+.goodagent-embed .ga-widget-match-table th,
+.goodagent-embed .ga-widget-match-table td {
+  border-color: var(--ah-forest-faint);
+}
+
+.goodagent-embed .ga-widget-match-badge-won {
+  background: rgba(22, 101, 52, 0.12);
+  color: var(--ah-ok);
+}
+
+.goodagent-embed .ga-widget-match-badge-lost {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--ah-error);
+}
+
+/* Deploy progress / loaders — celo accent */
+.goodagent-embed .ga-widget-deploy-orbit-ring-outer,
+.goodagent-embed .ga-widget-dash-loader-ring-outer {
+  border-color: var(--ah-forest-faint);
+}
+
+.goodagent-embed .ga-widget-deploy-orbit-ring-inner,
+.goodagent-embed .ga-widget-dash-loader-ring-inner,
+.goodagent-embed .ga-widget-deploy-rail-fill-active {
+  border-color: var(--ah-forest);
+  background: var(--ah-celo);
+}
+
+.goodagent-embed .ga-widget-deploy-dot-active .ga-widget-deploy-dot-mark {
+  background: var(--ah-celo);
+  border-color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-deploy-dot-done .ga-widget-deploy-dot-mark {
+  background: var(--ah-forest);
+}
+
+/* Banners & code */
+.goodagent-embed .ga-widget-banner {
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+  background: var(--ah-gypsum);
+}
+
+.goodagent-embed .ga-widget-banner-warn {
+  background: #fef9c3;
+}
+
+.goodagent-embed .ga-widget-log {
+  background: var(--ah-gypsum);
+  border: 2px solid var(--ah-forest);
+  border-radius: 0;
+  color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget code {
+  background: var(--ah-gypsum);
+  border: 1px solid var(--ah-forest-faint);
+  color: var(--ah-forest);
+  padding: 2px 6px;
+  border-radius: 0;
+}
+
+.goodagent-embed .ga-widget a {
+  color: var(--ah-purple);
+  font-weight: 600;
+}
+
+.goodagent-embed .ga-widget a:hover {
+  color: var(--ah-forest);
+}
+
+/* Vouch steps connector */
+.goodagent-embed .ga-widget-vouch-step::after {
+  background: var(--ah-forest-faint);
+}
+
+.goodagent-embed .ga-widget-vouch-step-active .ga-widget-vouch-step-num {
+  background: var(--ah-celo);
+  color: var(--ah-forest);
+  border-color: var(--ah-forest);
+}
+
+.goodagent-embed .ga-widget-vouch-step-done .ga-widget-vouch-step-num {
+  background: var(--ah-forest);
+  color: var(--ah-white);
+}
+
+.goodagent-embed .ga-widget-spinner {
+  border-color: var(--ah-forest-faint);
+  border-top-color: var(--ah-forest);
+}

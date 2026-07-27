@@ -153,7 +153,7 @@ export default function HowItWorksPage() {
                         Ready to Build?
                     </h2>
                     <div className="flex flex-wrap items-center justify-center gap-6">
-                        <Link href="/dashboard/agents/new">
+                        <Link href="/dashboard/agents/create">
                             <Button size="lg" className="h-16 px-12 text-xl font-bold uppercase tracking-widest neobrutal-shadow">
                                 Deploy Agent Now
                             </Button>

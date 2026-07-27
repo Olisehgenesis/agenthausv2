@@ -173,7 +173,7 @@ export default function AgentsPage() {
               🏷 Buy Haus Name
             </Button>
           </Link>
-          <Link href="/dashboard/agents/new">
+          <Link href="/dashboard/agents/create">
             <Button size="lg" className="text-xl px-12 h-16">
               <Plus className="w-6 h-6 stroke-[3px]" />
               New Deployment
@@ -190,7 +190,7 @@ export default function AgentsPage() {
           <p className="text-forest font-medium max-w-sm mx-auto mb-8">
             Deploy your first autonomous node to start interacting with the Celo ecosystem.
           </p>
-          <Link href="/dashboard/agents/new">
+          <Link href="/dashboard/agents/create">
             <Button size="lg">Initialize First Agent</Button>
           </Link>
         </Card>
