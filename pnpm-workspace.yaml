@@ -1,0 +1,36 @@
+allowBuilds:
+  '@prisma/engines': set this to true or false
+  '@reown/appkit': set this to true or false
+  blake-hash: set this to true or false
+  bufferutil: set this to true or false
+  esbuild: set this to true or false
+  keccak: set this to true or false
+  prisma: set this to true or false
+  protobufjs: set this to true or false
+  sharp: set this to true or false
+  unrs-resolver: set this to true or false
+  utf-8-validate: set this to true or false
+
+# Packages allowed to run install/build scripts. Required by pnpm v11
+# (strictDepBuilds is on by default; unapproved builds -> ERR_PNPM_IGNORED_BUILDS).
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - '@reown/appkit'
+  - blake-hash
+  - bufferutil
+  - esbuild
+  - keccak
+  - prisma
+  - protobufjs
+  - sharp
+  - unrs-resolver
+  - utf-8-validate
+
+# Force git-tarball subdeps to their registry versions.
+# pnpm v11 blocks exotic (git-resolved) subdependencies by default
+# (ERR_PNPM_EXOTIC_SUBDEP / blockExoticSubdeps).
+# - node-forge: @selfxyz/common pins a personal git fork; @selfxyz/core uses 1.3.3 from the registry.
+# - snarkjs:    @zk-email/helpers pins a personal git fork; siblings use 0.7.6 from the registry.
+overrides:
+  node-forge: ^1.3.3
+  snarkjs: 0.7.6
