@@ -26,6 +26,12 @@ onlyBuiltDependencies:
   - unrs-resolver
   - utf-8-validate
 
+# Downgrade ignored-build-script errors to warnings. pnpm 11.17+ still emits
+# ERR_PNPM_IGNORED_BUILDS with exit 1 even when the reported packages are all
+# in onlyBuiltDependencies (which breaks Next.js 16 runDepsStatusCheck). The
+# allowlist above still governs which scripts actually execute.
+strictDepBuilds: false
+
 # Force git-tarball subdeps to their registry versions.
 # pnpm v11 blocks exotic (git-resolved) subdependencies by default
 # (ERR_PNPM_EXOTIC_SUBDEP / blockExoticSubdeps).
